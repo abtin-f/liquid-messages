@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ============================ PERMISSIONS ============================ -->
+    <!-- Only what an SMS app actually uses. Every extra "dangerous" permission
+         raises Play Protect's risk score for a sideloaded SMS app, so unused ones
+         (WRITE_SMS, READ_PHONE_STATE, READ_PHONE_NUMBERS) are gone. -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_MMS" />
+    <uses-permission android:name="android.permission.RECEIVE_WAP_PUSH" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Send Later: exact alarms (user-grantable special access) and re-arming
+         them after a reboot. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Map previews for shared locations (OpenStreetMap tiles). Messages never
+         leave the phone over the internet; SMS/MMS go through the carrier. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- "Send My Location" — requested only when the user shares a location. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- Telephony is required for an SMS app; declare it so non-phone devices
+         filter the app out on the Play Store but it still installs on tablets. -->
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="false" />
+
+    <!-- Package visibility (Android 11+): let the composer resolve the system
+         speech-recognizer and dialer for voice-to-text and the call shortcut. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".MessagesApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true"
+        android:theme="@style/Theme.LiquidMessages"
+        tools:targetApi="34">
+
+        <!-- ===================== MAIN / LAUNCHER ACTIVITY =====================
+             Also handles the SENDTO / SEND intents that other apps fire to
+             compose an SMS or MMS. This is component (3) of the four required
+             to be eligible as the default SMS app. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.LiquidMessages.Splash">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+            <!-- Compose a message via sms:/smsto: schemes -->
+            <intent-filter>
+                <action android:name="android.intent.action.SENDTO" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="sms" />
+                <data android:scheme="smsto" />
+                <data android:scheme="mms" />
+                <data android:scheme="mmsto" />
+            </intent-filter>
+
+            <!-- Share text / images into a message (ACTION_SEND) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="sms" />
+                <data android:scheme="smsto" />
+                <data android:scheme="mms" />
+                <data android:scheme="mmsto" />
+            </intent-filter>
+        </activity>
+
+        <!-- ===================== SMS_DELIVER RECEIVER =====================
+             Component (1). The default SMS app is the ONLY app that receives
+             SMS_DELIVER. It is responsible for persisting the message to the
+             Telephony provider. Protected by BROADCAST_SMS so only the system
+             can deliver this broadcast. -->
+        <receiver
+            android:name=".data.receiver.SmsDeliverReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_DELIVER" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ===================== WAP_PUSH_DELIVER RECEIVER =====================
+             Component (2). Required for MMS delivery to the default app.
+             Protected by BROADCAST_WAP_PUSH. -->
+        <receiver
+            android:name=".data.receiver.MmsDeliverReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_WAP_PUSH">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.WAP_PUSH_DELIVER" />
+                <data android:mimeType="application/vnd.wap.mms-message" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ===================== RESPOND_VIA_MESSAGE SERVICE =====================
+             Component (4). Lets the in-call UI send a quick "respond via message"
+             reply. Protected by SEND_RESPOND_VIA_MESSAGE. -->
+        <service
+            android:name=".data.service.HeadlessSmsSendService"
+            android:exported="true"
+            android:permission="android.permission.SEND_RESPOND_VIA_MESSAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.RESPOND_VIA_MESSAGE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="sms" />
+                <data android:scheme="smsto" />
+                <data android:scheme="mms" />
+                <data android:scheme="mmsto" />
+            </intent-filter>
+        </service>
+
+        <!-- Carrier "sent" / "delivered" results for outgoing SMS. Declared in the
+             manifest (not registered at runtime) so a result that arrives after
+             the process was killed still updates the message row — otherwise the
+             bubble would stay on "Sending…" forever. Non-exported: only our own
+             explicit PendingIntents reach it. -->
+        <receiver
+            android:name=".data.receiver.SmsStatusReceiver"
+            android:exported="false" />
+
+        <!-- MMS results from the platform MMS service (download / send / ack). -->
+        <receiver
+            android:name=".data.mms.MmsDownloadedReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".data.mms.MmsSentReceiver"
+            android:exported="false" />
+
+        <!-- MMS PDUs and camera captures are shared with the MMS service / camera
+             app through this provider (cache/mms, cache/camera). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- Send Later: fires a scheduled message; re-arms alarms after reboot/update. -->
+        <receiver
+            android:name=".data.schedule.ScheduledSendReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".data.schedule.RescheduleReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Handles the incoming-message notification's inline Reply / Mark-as-read
+             actions. Non-exported: only our own explicit PendingIntent broadcasts
+             reach it. Routed here (not the SEND_RESPOND_VIA_MESSAGE-guarded service)
+             so the self-sent action is not blocked by that permission. -->
+        <receiver
+            android:name=".notification.NotificationActionReceiver"
+            android:exported="false" />
+
+    </application>
+</manifest>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pre-API-26 fallback: full green rounded square + white bubble in one vector. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M24,2 H84 A22,22 0 0 1 106,24 V84 A22,22 0 0 1 84,106 H24 A22,22 0 0 1 2,84 V24 A22,22 0 0 1 24,2 Z">
+        <aapt:attr xmlns:aapt="http://schemas.android.com/aapt"
+            name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54" android:startY="2"
+                android:endX="54" android:endY="106">
+                <item android:offset="0.0" android:color="#FF3CE15A" />
+                <item android:offset="1.0" android:color="#FF12B23E" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,32
+            C39,32 27,42.5 27,55
+            C27,61.5 30,67.4 35.5,71
+            C34.6,74.8 31.8,77.6 29.2,79.5
+            C28,80.4 28.4,81.7 29.9,81.5
+            C35.2,80.9 40.3,79 45,75.6
+            C47.6,76.7 50.5,77.3 54,77.3
+            C69,77.3 81,66.8 81,55
+            C81,42.5 69,32 54,32 Z" />
+</vector>

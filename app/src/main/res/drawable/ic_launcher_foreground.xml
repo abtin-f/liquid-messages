@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive-icon foreground: a white chat bubble with a tail at the bottom-left,
+     kept inside the 72dp adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,30
+            C38,30 26,41 26,54
+            C26,61 29.2,67.2 35,71
+            C34,75 31,78 28.2,80
+            C27,81 27.4,82.4 29,82.2
+            C34.6,81.6 40,79.6 45,76
+            C47.8,77.2 50.8,77.8 54,77.8
+            C70,77.8 82,66.8 82,54
+            C82,41 70,30 54,30 Z" />
+</vector>

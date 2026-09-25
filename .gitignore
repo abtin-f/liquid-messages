@@ -1,0 +1,41 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+/app/build
+
+# Release signing secrets — never commit.
+/keystore.properties
+/release.keystore
+*.keystore
+*.jks
+
+# Built artifacts — APKs are published as GitHub Release assets, not committed.
+*.apk
+*.aab
+build.log
+
+# Local-only material (not part of the app source)
+/uploads/
+/design/
+/screenshots/
+/Liquid Messages Trailer.mp4
+/Liquid Messages Design System.zip
+
+# Design-system bundle (web prototype of the UI; kept locally)
+/tokens/
+/components/
+/ui_kits/
+/cards/
+/assets/
+/styles.css
+/SKILL.md
+/_ds_bundle.js
+/_ds_manifest.json
+/_adherence.oxlintrc.json

@@ -1,0 +1,39 @@
+<resources>
+    <string name="app_name">Liquid Messages</string>
+
+    <!-- Conversation list -->
+    <string name="title_messages">Messages</string>
+    <string name="search_hint">Search</string>
+    <string name="empty_conversations_title">No Messages</string>
+    <string name="empty_conversations_subtitle">Tap the compose button to start a conversation.</string>
+    <string name="edit">Edit</string>
+
+    <!-- Chat -->
+    <string name="message_hint">Message</string>
+    <string name="message_hint_sms">Text Message</string>
+    <string name="send">Send</string>
+    <string name="delivered">Delivered</string>
+    <string name="read">Read</string>
+    <string name="sending">Sending…</string>
+    <string name="failed_to_send">Not Delivered</string>
+    <string name="today">Today</string>
+    <string name="yesterday">Yesterday</string>
+
+    <!-- New message -->
+    <string name="new_message_title">New Message</string>
+    <string name="to_label">To:</string>
+
+    <!-- Default app / permissions -->
+    <string name="set_default_title">Set as Default SMS App</string>
+    <string name="set_default_body">To send and receive messages, Liquid Messages needs to be your default SMS app.</string>
+    <string name="set_default_action">Set as Default</string>
+    <string name="permissions_title">Permissions Needed</string>
+    <string name="permissions_body">Liquid Messages needs access to SMS and contacts to work.</string>
+    <string name="grant_permissions">Continue</string>
+
+    <!-- Notifications -->
+    <string name="notif_channel_messages">Messages</string>
+    <string name="notif_channel_messages_desc">Incoming text messages</string>
+    <string name="notif_reply">Reply</string>
+    <string name="notif_mark_read">Mark as Read</string>
+</resources>

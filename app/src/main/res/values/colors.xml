@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand: iMessage-style green for the launcher icon background. -->
+    <color name="ic_launcher_background">#1FCB4F</color>
+
+    <!-- Status/navigation bar are transparent; Compose draws edge-to-edge. -->
+    <color name="transparent">#00000000</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Splash background (light + dark provided via values-night). -->
+    <color name="splash_background">#F2F2F7</color>
+</resources>

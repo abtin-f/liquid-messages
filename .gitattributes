@@ -1,0 +1,9 @@
+# Normalise line endings: LF in the repo (Linux CI), CRLF only for Windows scripts.
+* text=auto eol=lf
+*.bat text eol=crlf
+gradlew text eol=lf
+*.png binary
+*.jpg binary
+*.ttf binary
+*.jar binary
+*.apk binary
