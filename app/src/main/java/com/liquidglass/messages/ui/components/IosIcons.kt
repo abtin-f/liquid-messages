@@ -75,6 +75,15 @@ object IosIcons {
         }
     }
 
+    /** arrowshape.turn.up.left — reply. */
+    val Reply: ImageVector by lazy {
+        icon("arrowshape.turn.up.left", strokeWidth = 1.9f) {
+            moveTo(9.5f, 5.5f); lineTo(3.5f, 11f); lineTo(9.5f, 16.5f)
+            moveTo(3.8f, 11f); lineTo(14f, 11f)
+            curveTo(17.9f, 11f, 20.5f, 13.6f, 20.5f, 17.5f); lineTo(20.5f, 19f)
+        }
+    }
+
     /** arrow.up — send (drawn white inside a filled circle). */
     val ArrowUp: ImageVector by lazy {
         icon("arrow.up", strokeWidth = 2.6f) {

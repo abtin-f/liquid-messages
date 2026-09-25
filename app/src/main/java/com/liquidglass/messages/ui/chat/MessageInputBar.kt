@@ -83,6 +83,9 @@ fun MessageInputBar(
     /** Photos / files waiting to go out with this message (shown inside the field). */
     attachments: List<android.net.Uri> = emptyList(),
     onRemoveAttachment: (android.net.Uri) -> Unit = {},
+    /** "Replying to …" preview shown at the top of the field. */
+    replyPreview: ReplyPreview? = null,
+    onCancelReply: () -> Unit = {},
 ) {
     val colors = LiquidTheme.colors
     val canSend = text.isNotBlank() || attachments.isNotEmpty()
@@ -181,6 +184,9 @@ fun MessageInputBar(
                     .heightIn(min = 42.dp),
             ) {
               Column {
+                if (replyPreview != null) {
+                    ReplyComposerBar(replyPreview, onCancel = onCancelReply)
+                }
                 if (attachments.isNotEmpty()) {
                     // iOS shows pending media inside the field, above the text.
                     androidx.compose.foundation.lazy.LazyRow(
@@ -219,16 +225,21 @@ fun MessageInputBar(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+                            .padding(start = 16.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
                         contentAlignment = Alignment.CenterStart,
                     ) {
                         BasicTextField(
                             value = text,
                             onValueChange = onTextChange,
                             modifier = Modifier.fillMaxWidth(),
+                            // Paragraph direction follows the first strong letter:
+                            // Persian flows right-to-left and hugs the right edge,
+                            // English stays left-to-right — like iOS / Telegram.
                             textStyle = IosType.body.copy(
                                 color = colors.primaryText,
                                 fontFamily = fontFamilyFor(text),
+                                textDirection = androidx.compose.ui.text.style.TextDirection.Content,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Start,
                             ),
                             cursorBrush = SolidColor(colors.accent),
                             maxLines = 6,

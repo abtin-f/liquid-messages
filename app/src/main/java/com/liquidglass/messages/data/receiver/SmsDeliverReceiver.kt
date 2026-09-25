@@ -75,7 +75,8 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                     id = 0L,
                     threadId = threadId,
                     address = address,
-                    body = body,
+                    // Notification shows the text without an "(Sent with … effect)" line.
+                    body = com.liquidglass.messages.data.model.EffectTag.strip(body),
                     timestamp = timestamp,
                     isOutgoing = false,
                     status = com.liquidglass.messages.data.model.MessageStatus.RECEIVED,

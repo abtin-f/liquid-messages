@@ -62,6 +62,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,6 +98,7 @@ import com.liquidglass.messages.ui.glass.rememberBackdrop
 import com.liquidglass.messages.ui.theme.IosType
 import com.liquidglass.messages.ui.theme.LiquidTheme
 import com.liquidglass.messages.util.TimeFormat
+import kotlinx.coroutines.launch
 
 /** Gap between consecutive messages (ms) beyond which a timestamp is inserted. */
 private const val SEPARATOR_GAP_MS = 60L * 60L * 1000L
@@ -122,6 +124,7 @@ fun ChatScreen(
     val selectedEffect by viewModel.selectedEffect.collectAsStateWithLifecycle()
     val sendLaterAt by viewModel.sendLaterAt.collectAsStateWithLifecycle()
     val attachments by viewModel.attachments.collectAsStateWithLifecycle()
+    val replyTo by viewModel.replyTo.collectAsStateWithLifecycle()
     val characterCount by LocalContext.current.appContainer.appSettings.characterCount.collectAsStateWithLifecycle()
 
     // A shared/SENDTO body pre-fills the composer once.
@@ -153,6 +156,8 @@ fun ChatScreen(
         attachments = attachments,
         onAddAttachment = viewModel::addAttachment,
         onRemoveAttachment = viewModel::removeAttachment,
+        replyTo = replyTo,
+        onReplyTo = viewModel::setReplyTo,
     )
 }
 
@@ -202,6 +207,8 @@ fun ChatContent(
     attachments: List<android.net.Uri> = emptyList(),
     onAddAttachment: (android.net.Uri) -> Unit = {},
     onRemoveAttachment: (android.net.Uri) -> Unit = {},
+    replyTo: Message? = null,
+    onReplyTo: (Message?) -> Unit = {},
 ) {
     val colors = LiquidTheme.colors
     val context = LocalContext.current
@@ -249,10 +256,32 @@ fun ChatContent(
     // arrive afterwards animate. Seeded synchronously during composition (a
     // plain set, not snapshot state) so the first frame already sees it.
     val seeded = remember { booleanArrayOf(false) }
+    val historyIds = remember { mutableSetOf<Long>() }
     if (!seeded[0] && messages.isNotEmpty()) {
-        messages.forEach { animatedIds.add(it.id) }
+        messages.forEach { animatedIds.add(it.id); historyIds.add(it.id) }
         seeded[0] = true
     }
+
+    // Replies: who/what a quoted message shows, and jumping back to it.
+    val messagesById = remember(messages) { messages.associateBy { it.id } }
+    fun previewOf(m: Message): ReplyPreview {
+        val author = when {
+            m.isOutgoing -> "You"
+            state.isGroup -> state.participants[m.address]?.displayName ?: m.address
+            else -> state.contact.displayName
+        }
+        val visible = com.liquidglass.messages.data.model.EffectTag.strip(m.body)
+        val loc = com.liquidglass.messages.data.location.LocationLink.parse(visible)
+        val text = when {
+            loc != null -> loc.remainingText.ifBlank { "📍 " + (loc.label ?: "Location") }
+            visible.isBlank() && m.attachments.any { it.isImage } -> "📷 Photo"
+            visible.isBlank() && m.attachments.isNotEmpty() -> "📎 Attachment"
+            else -> visible
+        }
+        return ReplyPreview(author, text)
+    }
+    val jumpScope = rememberCoroutineScope()
+    var highlightId by remember { mutableStateOf<Long?>(null) }
 
     val lastOutgoingId = remember(messages) { messages.lastOrNull { it.isOutgoing }?.id }
     val rows = remember(messages, lastOutgoingId) { buildRows(context, messages, lastOutgoingId) }
@@ -312,51 +341,20 @@ fun ChatContent(
                         is ChatRow.Bubble -> {
                             val msg = row.message
                             val meta = state.meta[msg.id]
-                            val effect = meta?.effect ?: MessageEffect.NONE
-                            if (msg.isOutgoing && effect != MessageEffect.NONE) {
+                            // Effect: chosen here when we sent it, or carried in the SMS
+                            // text ("(Sent with … effect)") by the other phone.
+                            val tagEffect = remember(msg.body) { com.liquidglass.messages.data.model.EffectTag.parse(msg.body).effect }
+                            val effect = meta?.effect?.takeIf { it != MessageEffect.NONE } ?: tagEffect
+                            if (effect != MessageEffect.NONE && msg.id !in historyIds) {
                                 LaunchedEffect(msg.id) {
                                     if (autoPlayed.add(msg.id)) {
                                         effectTriggers[msg.id] = (effectTriggers[msg.id] ?: 0) + 1
                                     }
                                 }
                             }
-                            if (state.isGroup && !msg.isOutgoing) {
-                                // Group chats: the sender's avatar beside the last bubble of their run.
-                                Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(start = 8.dp)) {
-                                    Box(Modifier.width(28.dp).padding(bottom = 2.dp)) {
-                                        if (row.isLastInGroup) {
-                                            val who = state.participants[msg.address]
-                                            ContactAvatar(name = who?.displayName ?: msg.address, photoUri = who?.photoUri, size = 28.dp)
-                                        }
-                                    }
-                                    Box(Modifier.weight(1f)) {
-                                    MessageBubble(
-                                        message = msg,
-                                        isFirstInGroup = row.isFirstInGroup,
-                                        isLastInGroup = row.isLastInGroup,
-                                        showStatus = row.showStatus,
-                                        animatedIds = animatedIds,
-                                        reaction = meta?.reaction,
-                                        effect = effect,
-                                        effectTrigger = effectTriggers[msg.id] ?: 0,
-                                        maxWidthFraction = bubbleMaxFraction,
-                                        onLongPress = { menuTarget = msg },
-                                        onTap = {
-                                            if (effect != MessageEffect.NONE) {
-                                                effectTriggers[msg.id] = (effectTriggers[msg.id] ?: 0) + 1
-                                            }
-                                        },
-                                        onRetry = { onRetry(msg.id) },
-                                        senderName = if (state.isGroup && !msg.isOutgoing) {
-                                            state.participants[msg.address]?.displayName ?: msg.address
-                                        } else {
-                                            null
-                                        },
-                                        onOpenImage = { viewing = it },
-                                    )
-                                    }
-                                }
-                            } else {
+                            val quotedId = meta?.replyTo
+                            val quoted = quotedId?.let { messagesById[it] }?.let(::previewOf)
+                            val bubble: @Composable () -> Unit = {
                                 MessageBubble(
                                     message = msg,
                                     isFirstInGroup = row.isFirstInGroup,
@@ -380,7 +378,37 @@ fun ChatContent(
                                         null
                                     },
                                     onOpenImage = { viewing = it },
+                                    replyPreview = quoted,
+                                    onQuoteClick = {
+                                        val target = quotedId ?: return@MessageBubble
+                                        val idx = reversedRows.indexOfFirst { it is ChatRow.Bubble && it.message.id == target }
+                                        if (idx >= 0) {
+                                            jumpScope.launch {
+                                                listState.animateScrollToItem(idx + state.scheduled.size)
+                                                highlightId = target
+                                                kotlinx.coroutines.delay(700)
+                                                highlightId = null
+                                            }
+                                        }
+                                    },
+                                    highlighted = highlightId == msg.id,
                                 )
+                            }
+                            SwipeToReply(onReply = { onReplyTo(msg) }) {
+                                if (state.isGroup && !msg.isOutgoing) {
+                                    // Group chats: the sender's avatar beside the last bubble of their run.
+                                    Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(start = 8.dp)) {
+                                        Box(Modifier.width(28.dp).padding(bottom = 2.dp)) {
+                                            if (row.isLastInGroup) {
+                                                val who = state.participants[msg.address]
+                                                ContactAvatar(name = who?.displayName ?: msg.address, photoUri = who?.photoUri, size = 28.dp)
+                                            }
+                                        }
+                                        Box(Modifier.weight(1f)) { bubble() }
+                                    }
+                                } else {
+                                    bubble()
+                                }
                             }
                         }
                     }
@@ -417,6 +445,8 @@ fun ChatContent(
             showCharacterCount = showCharacterCount,
             attachments = attachments,
             onRemoveAttachment = onRemoveAttachment,
+            replyPreview = replyTo?.let(::previewOf),
+            onCancelReply = { onReplyTo(null) },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 // Measured OUTSIDE the inset padding so the list's bottom padding
@@ -477,8 +507,12 @@ fun ChatContent(
                         onReact(target.id, r)
                         menuTarget = null
                     },
+                    onReply = {
+                        onReplyTo(target)
+                        menuTarget = null
+                    },
                     onCopy = {
-                        copyToClipboard(context, target.body)
+                        copyToClipboard(context, com.liquidglass.messages.data.model.EffectTag.strip(target.body))
                         menuTarget = null
                     },
                     onDelete = {
@@ -642,6 +676,7 @@ private fun MessageMenuOverlay(
     selectedReaction: Reaction?,
     onDismiss: () -> Unit,
     onReact: (Reaction) -> Unit,
+    onReply: () -> Unit,
     onCopy: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -682,6 +717,8 @@ private fun MessageMenuOverlay(
                     .width(230.dp)
                     .glassControl(RoundedCornerShape(16.dp), colors.glassShadow, colors, GlassStyle.Menu),
             ) {
+                MenuItem("Reply", IosIcons.Reply, colors.primaryText, onReply)
+                Box(Modifier.fillMaxWidth().height(0.5.dp).background(colors.divider))
                 MenuItem("Copy", IosIcons.Copy, colors.primaryText, onCopy)
                 Box(Modifier.fillMaxWidth().height(0.5.dp).background(colors.divider))
                 MenuItem("Delete", IosIcons.Trash, colors.destructive, onDelete)

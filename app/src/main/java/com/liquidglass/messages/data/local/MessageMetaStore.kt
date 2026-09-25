@@ -15,8 +15,10 @@ import kotlinx.coroutines.launch
 data class MessageMeta(
     val reaction: Reaction? = null,
     val effect: MessageEffect = MessageEffect.NONE,
+    /** Id of the message this one replies to (SMS can't carry the link). */
+    val replyTo: Long? = null,
 ) {
-    val isEmpty: Boolean get() = reaction == null && effect == MessageEffect.NONE
+    val isEmpty: Boolean get() = reaction == null && effect == MessageEffect.NONE && replyTo == null
 }
 
 /**
@@ -74,6 +76,9 @@ class MessageMetaStore(context: Context) {
     fun setEffect(messageId: Long, effect: MessageEffect) =
         update(messageId) { it.copy(effect = effect) }
 
+    /** Links [messageId] as a reply to [targetId]. */
+    fun setReplyTo(messageId: Long, targetId: Long) = update(messageId) { it.copy(replyTo = targetId) }
+
     /** Forgets all metadata for a deleted message. */
     fun clear(messageId: Long) = update(messageId) { MessageMeta() }
 
@@ -91,14 +96,15 @@ class MessageMetaStore(context: Context) {
     }
 
     private fun encode(meta: MessageMeta): String =
-        "${meta.reaction?.name ?: ""}|${meta.effect.name}"
+        "${meta.reaction?.name ?: ""}|${meta.effect.name}|${meta.replyTo ?: ""}"
 
     private fun decode(value: String): MessageMeta {
         val parts = value.split("|")
         val reaction = parts.getOrNull(0)?.takeIf { it.isNotEmpty() }
             ?.let { name -> Reaction.entries.firstOrNull { it.name == name } }
         val effect = MessageEffect.fromName(parts.getOrNull(1))
-        return MessageMeta(reaction, effect)
+        val replyTo = parts.getOrNull(2)?.toLongOrNull()
+        return MessageMeta(reaction, effect, replyTo)
     }
 
     private fun loadAll(): Map<Long, MessageMeta> {

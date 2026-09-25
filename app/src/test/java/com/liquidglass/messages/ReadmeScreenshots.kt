@@ -107,6 +107,27 @@ class ReadmeScreenshots {
         onDeleteThread = {},
     )
 
+    @Test fun reply() = shot("reply", false) {
+        val msgs = listOf(
+            m(1, "Can you bring the charger tonight?", false, 20),
+            m(2, "Also the book I lent you 📘", false, 19),
+            m(3, "Sure, both of them!", true, 5, MessageStatus.DELIVERED),
+            m(4, "You're the best!\n(Sent with Big effect)", false, 2),
+        )
+        ChatContent(
+            state = ChatUiState(
+                messages = msgs,
+                contact = Contact("+989121112233", "Sara Ahmadi"),
+                meta = mapOf(3L to com.liquidglass.messages.data.local.MessageMeta(replyTo = 1L)),
+            ),
+            inputText = "",
+            onInputChange = {},
+            onSend = {},
+            onBack = {},
+            replyTo = msgs[1],
+        )
+    }
+
     @Test fun list() = shot("list", false) { listScreen() }
     @Test fun listDark() = shot("list_dark", true) { listScreen() }
     @Test fun chat() = shot("chat", false) { chatScreen(chat, "Sara Ahmadi") }

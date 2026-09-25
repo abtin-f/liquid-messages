@@ -421,7 +421,11 @@ private fun SearchBar(
                         .focusRequester(focus)
                         .onFocusChanged { if (it.isFocused) onFocus() },
                     singleLine = true,
-                    textStyle = IosType.body.copy(color = colors.primaryText),
+                    textStyle = IosType.body.copy(
+                        color = colors.primaryText,
+                        textDirection = androidx.compose.ui.text.style.TextDirection.Content,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+                    ),
                     cursorBrush = SolidColor(colors.accent),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),

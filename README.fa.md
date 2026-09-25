@@ -39,7 +39,7 @@
   <tr>
     <td align="center"><img src="docs/screenshots/contact_info.png" width="230"><br><sub>اطلاعات مخاطب</sub></td>
     <td align="center"><img src="docs/screenshots/new_message.png" width="230"><br><sub>پیام جدید</sub></td>
-    <td align="center"><img src="docs/screenshots/chat_fa.png" width="230"><br><sub>گفتگوی فارسی</sub></td>
+    <td align="center"><img src="docs/screenshots/reply.png" width="230"><br><sub>ریپلای</sub></td>
   </tr>
 </table>
 
@@ -51,7 +51,8 @@
 - اپ پیش‌فرض کامل پیامک: ارسال، دریافت، گزارش تحویل، دو سیم‌کارت، و «Not Delivered — برای ارسال دوباره لمس کن»
 - **MMS**: عکس، دوربین، فایل و چت گروهی (با رمزگذار و رمزگشای MMS که از صفر نوشته شده)
 - **Send Later**: پیام زمان‌بندی‌شده که بعد از ری‌استارت گوشی هم فرستاده می‌شه
-- ری‌اکشن روی پیام، افکت ارسال و استیکر
+- **ریپلای** با کشیدن پیام به راست و نقل‌قول قابل لمس
+- ری‌اکشن، استیکر و افکت ارسال که روی گوشی طرف مقابل هم پخش می‌شه
 - ارسال **لوکیشن** به‌صورت کارت نقشه (با OpenStreetMap، بدون نیاز به سرویس‌های گوگل)
 - لینک، ایمیل و شماره تلفن قابل لمس (شماره‌های ایرانی هم شناخته می‌شن)
 - بلاک کردن شماره، بی‌صدا کردن گفتگو، کپی و حذف پیام
@@ -69,7 +70,7 @@
 
 ## نصب
 
-۱. فایل **`LiquidMessages-v1.6.1.apk`** رو از [آخرین نسخه](https://github.com/abtin-f/liquid-messages/releases/latest) دانلود کن.
+۱. فایل **`LiquidMessages-v1.7.0.apk`** رو از [آخرین نسخه](https://github.com/abtin-f/liquid-messages/releases/latest) دانلود کن.
 
 ۲. روی گوشی بازش کن و اجازه‌ی نصب از این منبع رو بده. اگه Play Protect هشدار داد، **More details ← Install anyway** رو بزن.
 

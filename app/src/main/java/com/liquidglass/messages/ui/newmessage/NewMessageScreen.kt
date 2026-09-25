@@ -153,7 +153,11 @@ fun NewMessageSheet(
                         value = state.recipient,
                         onValueChange = viewModel::onRecipientChange,
                         singleLine = true,
-                        textStyle = IosType.body.copy(color = colors.primaryText),
+                        textStyle = IosType.body.copy(
+                        color = colors.primaryText,
+                        textDirection = androidx.compose.ui.text.style.TextDirection.Content,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+                    ),
                         cursorBrush = SolidColor(colors.accent),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                         modifier = Modifier.fillMaxWidth().focusRequester(focus),

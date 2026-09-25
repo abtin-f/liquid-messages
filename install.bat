@@ -23,7 +23,7 @@ rem ------------------------------------------------------------------
 set "HERE=%~dp0"
 set "ADB=%HERE%..\.android-toolchain\sdk\platform-tools\adb.exe"
 if not exist "%ADB%" set "ADB=adb"
-set "APK=%HERE%LiquidMessages-v1.6.0.apk"
+set "APK=%HERE%LiquidMessages-v1.7.0.apk"
 set "PKG=com.liquidglass.messages"
 
 if not exist "%APK%" (

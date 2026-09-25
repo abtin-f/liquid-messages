@@ -187,8 +187,9 @@ fun ConversationRow(
                 }
                 Text(
                     text = remember(conversation.snippet) {
-                        val loc = com.liquidglass.messages.data.location.LocationLink.parse(conversation.snippet)
-                        if (loc == null) conversation.snippet
+                        val visible = com.liquidglass.messages.data.model.EffectTag.strip(conversation.snippet)
+                        val loc = com.liquidglass.messages.data.location.LocationLink.parse(visible)
+                        if (loc == null) visible
                         else loc.remainingText.ifBlank { "📍 " + (loc.label ?: "Location") }
                     },
                     style = IosType.subheadline,

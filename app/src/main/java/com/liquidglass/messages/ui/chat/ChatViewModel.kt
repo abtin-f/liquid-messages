@@ -11,6 +11,7 @@ import com.liquidglass.messages.MessagesApplication
 import com.liquidglass.messages.data.local.MessageMeta
 import com.liquidglass.messages.data.local.MessageMetaStore
 import com.liquidglass.messages.data.model.Contact
+import com.liquidglass.messages.data.model.EffectTag
 import com.liquidglass.messages.data.model.Message
 import com.liquidglass.messages.data.model.MessageEffect
 import com.liquidglass.messages.data.model.Reaction
@@ -96,6 +97,10 @@ class ChatViewModel(
     /** Effect chosen in the composer, applied to the next outgoing message. */
     private val _selectedEffect = MutableStateFlow(MessageEffect.NONE)
     val selectedEffect: StateFlow<MessageEffect> = _selectedEffect.asStateFlow()
+
+    /** The message being replied to (shown above the composer). */
+    private val _replyTo = MutableStateFlow<Message?>(null)
+    val replyTo: StateFlow<Message?> = _replyTo.asStateFlow()
 
     /** Photos / files staged in the composer (copied into our cache). */
     private val _attachments = MutableStateFlow<List<Uri>>(emptyList())
@@ -232,45 +237,55 @@ class ChatViewModel(
     fun sendMessage() {
         val text = _inputText.value.trim()
         val files = _attachments.value
-        if (files.isNotEmpty() || _uiState.value.isGroup) {
-            if (text.isBlank() && files.isEmpty()) return
-            // Photos/files and group conversations go out as one MMS.
-            _inputText.value = ""
-            _attachments.value = emptyList()
-            viewModelScope.launch {
-                _uiState.update { it.copy(isSending = true) }
-                val to = _uiState.value.recipients.ifEmpty { listOf(address) }
-                repository.sendMms(to, text, files, _uiState.value.subscriptionId)
-                _uiState.update { it.copy(isSending = false) }
-            }
-            return
-        }
-        if (text.isBlank()) return
-        val later = _sendLaterAt.value
-        if (later != null) {
-            scheduler.schedule(address, text, later, _uiState.value.subscriptionId)
-            _inputText.value = ""
-            _sendLaterAt.value = null
-            return
-        }
+        if (text.isBlank() && files.isEmpty()) return
         val effect = _selectedEffect.value
-        _inputText.value = ""
+        val reply = _replyTo.value
+        val group = _uiState.value.isGroup
+        // The effect travels as iOS does over SMS: a readable "(Sent with … effect)"
+        // line that Liquid Messages on the other phone turns back into the animation.
+        val wire = if (text.isBlank()) text else EffectTag.append(text, effect)
+
+        val later = _sendLaterAt.value
+        if (later != null && files.isEmpty() && !group) {
+            scheduler.schedule(address, wire, later, _uiState.value.subscriptionId)
+            resetComposer()
+            return
+        }
+
+        resetComposer()
         viewModelScope.launch {
             _uiState.update { it.copy(isSending = true) }
-            repository.sendMessage(address, text, _uiState.value.subscriptionId)
-            if (effect != MessageEffect.NONE && threadId > 0L) {
-                // The OUTBOX/Sent row is inserted before send returns, so the
-                // newest outgoing message is the one we just sent.
-                val newestOutgoingId = repository.getMessages(threadId)
-                    .lastOrNull { it.isOutgoing }
-                    ?.id
+            if (files.isNotEmpty() || group) {
+                // Photos/files and group conversations go out as one MMS.
+                val to = _uiState.value.recipients.ifEmpty { listOf(address) }
+                repository.sendMms(to, wire, files, _uiState.value.subscriptionId)
+            } else {
+                repository.sendMessage(address, wire, _uiState.value.subscriptionId)
+            }
+            if ((effect != MessageEffect.NONE || reply != null) && threadId > 0L) {
+                // The outbox row is inserted before send returns, so the newest
+                // outgoing message is the one we just sent.
+                val newestOutgoingId = repository.getMessages(threadId).lastOrNull { it.isOutgoing }?.id
                 if (newestOutgoingId != null) {
-                    metaStore.setEffect(newestOutgoingId, effect)
+                    if (effect != MessageEffect.NONE) metaStore.setEffect(newestOutgoingId, effect)
+                    if (reply != null) metaStore.setReplyTo(newestOutgoingId, reply.id)
                 }
             }
-            _selectedEffect.value = MessageEffect.NONE
             _uiState.update { it.copy(isSending = false) }
         }
+    }
+
+    private fun resetComposer() {
+        _inputText.value = ""
+        _attachments.value = emptyList()
+        _sendLaterAt.value = null
+        _selectedEffect.value = MessageEffect.NONE
+        _replyTo.value = null
+    }
+
+    /** Message the next send replies to (swipe-to-reply / menu → Reply). */
+    fun setReplyTo(message: Message?) {
+        _replyTo.value = message
     }
 
     /** Arms / clears "Send Later" for the next message. */

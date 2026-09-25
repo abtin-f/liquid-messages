@@ -36,7 +36,7 @@ Liquid Messages is a complete **default SMS/MMS app** for Android, designed to l
   <tr>
     <td align="center"><img src="docs/screenshots/contact_info.png" width="230"><br><sub>Contact details</sub></td>
     <td align="center"><img src="docs/screenshots/new_message.png" width="230"><br><sub>New message sheet</sub></td>
-    <td align="center"><img src="docs/screenshots/list_dark.png" width="230"><br><sub>Dark list</sub></td>
+    <td align="center"><img src="docs/screenshots/reply.png" width="230"><br><sub>Swipe to reply</sub></td>
   </tr>
 </table>
 
@@ -46,7 +46,8 @@ Liquid Messages is a complete **default SMS/MMS app** for Android, designed to l
 - Full default SMS app: send, receive, delivery reports, dual-SIM, “Not Delivered — tap to retry”
 - **MMS**: photos, camera, files, group chats — with a from-scratch MMS PDU encoder/decoder
 - **Send Later** (scheduled messages that survive reboots)
-- Tapback reactions, send-with-effect animations, stickers
+- **Swipe to reply** with quoted messages
+- Tapback reactions, stickers, and send-with-effect animations that also play on the recipient's phone
 - Share your **location** as a map card (OpenStreetMap, no Google services needed)
 - Tappable links, e-mails and phone numbers (Iranian numbers included)
 - Block numbers, hide alerts per conversation, copy / delete messages
@@ -64,7 +65,7 @@ Liquid Messages is a complete **default SMS/MMS app** for Android, designed to l
 
 ## Install
 
-1. Download **`LiquidMessages-v1.6.1.apk`** from the [latest release](https://github.com/abtin-f/liquid-messages/releases/latest).
+1. Download **`LiquidMessages-v1.7.0.apk`** from the [latest release](https://github.com/abtin-f/liquid-messages/releases/latest).
 2. Open it on your phone and allow installing from this source. If Play Protect warns about an unknown app, tap **More details → Install anyway**.
 3. Open the app and tap **Set as Default SMS App**.
 

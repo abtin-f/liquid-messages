@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.liquidglass.messages.data.location.LocationLink
 import com.liquidglass.messages.data.model.Attachment
+import com.liquidglass.messages.data.model.EffectTag
 import com.liquidglass.messages.data.model.Message
 import com.liquidglass.messages.data.model.MessageEffect
 import com.liquidglass.messages.data.model.MessageStatus
@@ -87,15 +89,24 @@ fun MessageBubble(
     /** Group chats: sender name shown above the first bubble of their run. */
     senderName: String? = null,
     onOpenImage: (Attachment) -> Unit = {},
+    /** The message this one answers, shown as a small quote above it. */
+    replyPreview: ReplyPreview? = null,
+    onQuoteClick: () -> Unit = {},
+    /** Briefly pulses the bubble (after jumping to it from a reply). */
+    highlighted: Boolean = false,
 ) {
     val colors = LiquidTheme.colors
     val outgoing = message.isOutgoing
     val failed = outgoing && message.status == MessageStatus.FAILED
     // A shared location renders as a map card; any other text stays a bubble.
-    val location = remember(message.body) { LocationLink.parse(message.body) }
-    val bodyText = location?.remainingText ?: message.body
+    val visibleBody = remember(message.body) { EffectTag.strip(message.body) }
+    val location = remember(visibleBody) { LocationLink.parse(visibleBody) }
+    val bodyText = location?.remainingText ?: visibleBody
     val rtl = TextDirection.isRtl(bodyText)
-    val jumbo = remember(message.body) { jumboEmojiCount(LocationLink.parse(message.body)?.remainingText ?: message.body) }
+    val jumbo = remember(message.body) {
+        val visible = EffectTag.strip(message.body)
+        jumboEmojiCount(LocationLink.parse(visible)?.remainingText ?: visible)
+    }
 
     // Pop-in only the first time a message is ever shown (ids hoisted by the
     // list so recycled rows scrolled back into view don't re-animate).
@@ -111,9 +122,19 @@ fun MessageBubble(
         }
     }
 
+    val pulse by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (highlighted) 1.06f else 1f,
+        animationSpec = spring(dampingRatio = 0.45f, stiffness = 380f),
+        label = "replyTargetPulse",
+    )
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = pulse
+                scaleY = pulse
+                transformOrigin = TransformOrigin(if (outgoing) 1f else 0f, 0.5f)
+            }
             .padding(
                 start = BubbleEdgeInset,
                 end = BubbleEdgeInset,
@@ -127,6 +148,18 @@ fun MessageBubble(
                 style = IosType.caption1,
                 color = colors.secondaryText,
                 modifier = Modifier.padding(start = 12.dp + BubbleTailWidth, bottom = 2.dp),
+            )
+        }
+        if (replyPreview != null) {
+            QuotedMessage(
+                preview = replyPreview,
+                outgoing = outgoing,
+                onClick = onQuoteClick,
+                modifier = Modifier.padding(
+                    start = if (outgoing) 0.dp else BubbleTailWidth,
+                    end = if (outgoing) BubbleTailWidth else 0.dp,
+                    bottom = 3.dp,
+                ),
             )
         }
         if (location != null) {
