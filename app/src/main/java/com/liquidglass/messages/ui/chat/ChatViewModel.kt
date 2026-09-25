@@ -12,6 +12,7 @@ import com.liquidglass.messages.data.local.MessageMeta
 import com.liquidglass.messages.data.local.MessageMetaStore
 import com.liquidglass.messages.data.model.Contact
 import com.liquidglass.messages.data.model.EffectTag
+import com.liquidglass.messages.data.model.ReplyTag
 import com.liquidglass.messages.data.model.Message
 import com.liquidglass.messages.data.model.MessageEffect
 import com.liquidglass.messages.data.model.Reaction
@@ -243,7 +244,9 @@ class ChatViewModel(
         val group = _uiState.value.isGroup
         // The effect travels as iOS does over SMS: a readable "(Sent with … effect)"
         // line that Liquid Messages on the other phone turns back into the animation.
-        val wire = if (text.isBlank()) text else EffectTag.append(text, effect)
+        val withEffect = if (text.isBlank()) text else EffectTag.append(text, effect)
+        // Replies travel as a short quote line so the other phone can link them too.
+        val wire = if (reply != null && withEffect.isNotBlank()) ReplyTag.format(reply, withEffect) else withEffect
 
         val later = _sendLaterAt.value
         if (later != null && files.isEmpty() && !group) {

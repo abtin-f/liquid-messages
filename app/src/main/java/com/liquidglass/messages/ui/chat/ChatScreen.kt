@@ -270,15 +270,7 @@ fun ChatContent(
             state.isGroup -> state.participants[m.address]?.displayName ?: m.address
             else -> state.contact.displayName
         }
-        val visible = com.liquidglass.messages.data.model.EffectTag.strip(m.body)
-        val loc = com.liquidglass.messages.data.location.LocationLink.parse(visible)
-        val text = when {
-            loc != null -> loc.remainingText.ifBlank { "📍 " + (loc.label ?: "Location") }
-            visible.isBlank() && m.attachments.any { it.isImage } -> "📷 Photo"
-            visible.isBlank() && m.attachments.isNotEmpty() -> "📎 Attachment"
-            else -> visible
-        }
-        return ReplyPreview(author, text)
+        return ReplyPreview(author, com.liquidglass.messages.data.model.MessageText.summary(m))
     }
     val jumpScope = rememberCoroutineScope()
     var highlightId by remember { mutableStateOf<Long?>(null) }
@@ -352,8 +344,15 @@ fun ChatContent(
                                     }
                                 }
                             }
-                            val quotedId = meta?.replyTo
+                            // Our own replies are linked locally; received ones carry a
+                            // "↪ «quote»" line that is matched back to the original here.
+                            val quoteLine = remember(msg.body) { com.liquidglass.messages.data.model.ReplyTag.parse(msg.body).quote }
+                            val matchedId = remember(msg.id, quoteLine, messages.size) {
+                                quoteLine?.let { q -> com.liquidglass.messages.data.model.ReplyTag.findQuoted(q, msg, messages)?.id }
+                            }
+                            val quotedId = meta?.replyTo ?: matchedId
                             val quoted = quotedId?.let { messagesById[it] }?.let(::previewOf)
+                                ?: quoteLine?.let { ReplyPreview(author = "Reply", text = it) }
                             val bubble: @Composable () -> Unit = {
                                 MessageBubble(
                                     message = msg,
@@ -512,7 +511,7 @@ fun ChatContent(
                         menuTarget = null
                     },
                     onCopy = {
-                        copyToClipboard(context, com.liquidglass.messages.data.model.EffectTag.strip(target.body))
+                        copyToClipboard(context, com.liquidglass.messages.data.model.MessageText.visible(target.body))
                         menuTarget = null
                     },
                     onDelete = {

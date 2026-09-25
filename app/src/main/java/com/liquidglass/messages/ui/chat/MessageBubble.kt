@@ -99,12 +99,12 @@ fun MessageBubble(
     val outgoing = message.isOutgoing
     val failed = outgoing && message.status == MessageStatus.FAILED
     // A shared location renders as a map card; any other text stays a bubble.
-    val visibleBody = remember(message.body) { EffectTag.strip(message.body) }
+    val visibleBody = remember(message.body) { com.liquidglass.messages.data.model.MessageText.visible(message.body) }
     val location = remember(visibleBody) { LocationLink.parse(visibleBody) }
     val bodyText = location?.remainingText ?: visibleBody
     val rtl = TextDirection.isRtl(bodyText)
     val jumbo = remember(message.body) {
-        val visible = EffectTag.strip(message.body)
+        val visible = com.liquidglass.messages.data.model.MessageText.visible(message.body)
         jumboEmojiCount(LocationLink.parse(visible)?.remainingText ?: visible)
     }
 

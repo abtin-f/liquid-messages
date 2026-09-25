@@ -2,6 +2,7 @@
 
 ## 1.7.0 — 2026-09-25
 - **Reply to a message**: swipe right on any bubble or choose *Reply*; the reply shows a tappable quote that jumps to the original
+- **Replies reach the other phone**: a short “↪ «quote»” first line travels with the SMS; Liquid Messages on the other side links it to the original message, other apps show a readable quote
 - **Effects reach the other phone**: sent as a readable “(Sent with … effect)” line, like iPhones do over SMS — Liquid Messages hides it and plays the animation (iPhone effect names such as Slam or Loud are recognised too)
 - Persian and other right-to-left text now types right-aligned with correct word order in the composer, search and “To:” fields
 

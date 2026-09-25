@@ -112,7 +112,8 @@ class ReadmeScreenshots {
             m(1, "Can you bring the charger tonight?", false, 20),
             m(2, "Also the book I lent you 📘", false, 19),
             m(3, "Sure, both of them!", true, 5, MessageStatus.DELIVERED),
-            m(4, "You're the best!\n(Sent with Big effect)", false, 2),
+            // A reply that arrived from another phone: quote line + effect line.
+            m(4, "↪ «Sure, both of them!»\nYou're the best!\n(Sent with Big effect)", false, 2),
         )
         ChatContent(
             state = ChatUiState(
