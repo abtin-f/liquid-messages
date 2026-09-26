@@ -1,9 +1,9 @@
 package com.liquidglass.messages.ui.chat
 
 import android.content.Context
+import com.liquidglass.messages.ui.components.IosDialogs
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -195,5 +195,5 @@ private fun openInMaps(context: Context, loc: SharedLocation) {
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     runCatching { context.startActivity(geo) }
         .recoverCatching { context.startActivity(web) }
-        .onFailure { Toast.makeText(context, "No maps app found.", Toast.LENGTH_SHORT).show() }
+        .onFailure { IosDialogs.alert("No Maps App", "Install a maps app to open locations.") }
 }

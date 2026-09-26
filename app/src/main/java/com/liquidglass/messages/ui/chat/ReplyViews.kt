@@ -57,7 +57,11 @@ private val ReplyMaxDrag = 76.dp
  * springs back either way.
  */
 @Composable
-fun SwipeToReply(onReply: () -> Unit, content: @Composable () -> Unit) {
+fun SwipeToReply(onReply: () -> Unit, enabled: Boolean = true, content: @Composable () -> Unit) {
+    if (!enabled) {
+        content()
+        return
+    }
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()

@@ -40,8 +40,12 @@ fun ReactionBadge(
     reaction: Reaction,
     outgoing: Boolean,
     modifier: Modifier = Modifier,
+    /** Our own tapback: iMessage paints it in the accent blue. */
+    mine: Boolean = false,
 ) {
     val colors = LiquidTheme.colors
+    val fill = if (mine) colors.accent else colors.receivedBubble
+    val ring = if (mine) colors.chatBackground else colors.divider
 
     val pop = remember { Animatable(0f) }
     LaunchedEffect(reaction) {
@@ -75,8 +79,8 @@ fun ReactionBadge(
                 .align(if (outgoing) Alignment.BottomStart else Alignment.BottomEnd)
                 .size(7.dp)
                 .clip(CircleShape)
-                .background(colors.receivedBubble)
-                .border(0.5.dp, colors.divider, CircleShape),
+                .background(fill)
+                .border(0.5.dp, ring, CircleShape),
         )
 
         // Main chip.
@@ -84,8 +88,8 @@ fun ReactionBadge(
             modifier = Modifier
                 .size(26.dp)
                 .clip(CircleShape)
-                .background(colors.receivedBubble)
-                .border(0.5.dp, colors.divider, CircleShape),
+                .background(fill)
+                .border(if (mine) 1.5.dp else 0.5.dp, ring, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Text(

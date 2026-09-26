@@ -11,14 +11,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/** Local-only per-message extras that SMS cannot carry: a tapback + a send effect. */
+/**
+ * Local-only per-message extras that SMS cannot carry. Like iMessage, each
+ * person owns their own tapback: [reaction] is ours (only we can change it),
+ * [theirReaction] arrived from the other phone and is read-only here.
+ */
+@androidx.compose.runtime.Immutable
 data class MessageMeta(
     val reaction: Reaction? = null,
     val effect: MessageEffect = MessageEffect.NONE,
     /** Id of the message this one replies to (SMS can't carry the link). */
     val replyTo: Long? = null,
+    val theirReaction: Reaction? = null,
 ) {
-    val isEmpty: Boolean get() = reaction == null && effect == MessageEffect.NONE && replyTo == null
+    val isEmpty: Boolean get() =
+        reaction == null && theirReaction == null && effect == MessageEffect.NONE && replyTo == null
 }
 
 /**
@@ -60,6 +67,10 @@ class MessageMetaStore(context: Context) {
     fun setReaction(messageId: Long, reaction: Reaction?) =
         update(messageId) { it.copy(reaction = reaction) }
 
+    /** Applies the other person's tapback (sync from their phone); null removes it. */
+    fun setTheirReaction(messageId: Long, reaction: Reaction?) =
+        update(messageId) { it.copy(theirReaction = reaction) }
+
     /**
      * Toggles a tapback (tapping the same reaction again removes it) atomically,
      * returning the resulting reaction (or null if cleared) so a caller can derive
@@ -96,15 +107,16 @@ class MessageMetaStore(context: Context) {
     }
 
     private fun encode(meta: MessageMeta): String =
-        "${meta.reaction?.name ?: ""}|${meta.effect.name}|${meta.replyTo ?: ""}"
+        "${meta.reaction?.name ?: ""}|${meta.effect.name}|${meta.replyTo ?: ""}|${meta.theirReaction?.name ?: ""}"
 
     private fun decode(value: String): MessageMeta {
         val parts = value.split("|")
-        val reaction = parts.getOrNull(0)?.takeIf { it.isNotEmpty() }
+        fun reactionAt(i: Int) = parts.getOrNull(i)?.takeIf { it.isNotEmpty() }
             ?.let { name -> Reaction.entries.firstOrNull { it.name == name } }
+        val reaction = reactionAt(0)
         val effect = MessageEffect.fromName(parts.getOrNull(1))
         val replyTo = parts.getOrNull(2)?.toLongOrNull()
-        return MessageMeta(reaction, effect, replyTo)
+        return MessageMeta(reaction, effect, replyTo, theirReaction = reactionAt(3))
     }
 
     private fun loadAll(): Map<Long, MessageMeta> {

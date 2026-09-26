@@ -59,14 +59,7 @@ fun EffectPicker(
     onDismiss: () -> Unit,
 ) {
     val colors = LiquidTheme.colors
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = colors.chatBackground,
-        scrimColor = Color.Black.copy(alpha = 0.32f),
-    ) {
+    com.liquidglass.messages.ui.components.IosSheet(onDismiss = onDismiss, containerColor = colors.chatBackground) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

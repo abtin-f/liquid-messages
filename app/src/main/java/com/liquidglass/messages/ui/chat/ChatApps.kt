@@ -1,11 +1,17 @@
 package com.liquidglass.messages.ui.chat
 
 import android.Manifest
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.runtime.mutableIntStateOf
+import com.liquidglass.messages.ui.components.IosWheelBand
+import com.liquidglass.messages.ui.components.IosWheel
+import com.liquidglass.messages.ui.components.IosSheetBar
+import com.liquidglass.messages.ui.components.IosSheet
+import com.liquidglass.messages.ui.components.IosDialogs
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.provider.ContactsContract
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -26,17 +32,14 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -129,16 +132,14 @@ fun ChatAppsMenu(onPick: (ChatApp) -> Unit, modifier: Modifier = Modifier) {
 }
 
 /**
- * iOS 18 "Send Later" chooser: quick picks plus a custom date & time.
- * Returns the chosen epoch-millis through [onPick].
+ * iOS 18 "Send Later" chooser: quick picks plus a custom time on real iOS
+ * picker wheels (day · hour · minute · AM/PM). Returns epoch millis via [onPick].
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SendLaterSheet(onPick: (Long) -> Unit, onDismiss: () -> Unit) {
     val colors = LiquidTheme.colors
     val context = LocalContext.current
-    var customStep by remember { mutableStateOf(0) } // 0 quick, 1 date, 2 time
-    var pickedDay by remember { mutableStateOf<Long?>(null) }
+    var custom by remember { mutableStateOf(false) }
 
     val quick = remember {
         val now = Calendar.getInstance()
@@ -153,67 +154,72 @@ fun SendLaterSheet(onPick: (Long) -> Unit, onDismiss: () -> Unit) {
         }
     }
 
-    when (customStep) {
-        0 -> ModalBottomSheet(
-            onDismissRequest = onDismiss,
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = colors.groupedBackground,
-        ) {
-            Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
-                Text("Send Later", style = IosType.title2, color = colors.primaryText, modifier = Modifier.padding(start = 4.dp, bottom = 14.dp))
+    // Wheel state: day offset from today, 12-hour clock, minute, AM/PM.
+    val start = remember { Calendar.getInstance().apply { add(Calendar.MINUTE, 5) } }
+    var day by remember { mutableIntStateOf(0) }
+    var hour12 by remember { mutableIntStateOf((start.get(Calendar.HOUR) + 11) % 12) } // index 0 = "1"
+    var minute by remember { mutableIntStateOf(start.get(Calendar.MINUTE)) }
+    var pm by remember { mutableIntStateOf(if (start.get(Calendar.AM_PM) == Calendar.PM) 1 else 0) }
+
+    val dayLabels = remember {
+        val fmt = java.text.SimpleDateFormat("EEE MMM d", java.util.Locale.getDefault())
+        List(60) { i ->
+            when (i) {
+                0 -> "Today"
+                1 -> "Tomorrow"
+                else -> fmt.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, i) }.time)
+            }
+        }
+    }
+    val hours = remember { List(12) { (it + 1).toString() } }
+    val minutes = remember { List(60) { "%02d".format(it) } }
+
+    fun chosenTime(): Long = Calendar.getInstance().apply {
+        add(Calendar.DAY_OF_YEAR, day)
+        val h = (hour12 + 1) % 12 + if (pm == 1) 12 else 0
+        set(Calendar.HOUR_OF_DAY, h); set(Calendar.MINUTE, minute); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    IosSheet(onDismiss = onDismiss) {
+        if (!custom) {
+            IosSheetBar(title = "Send Later", onCancel = onDismiss)
+            Column(Modifier.padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 32.dp)) {
                 Column(Modifier.clip(RoundedCornerShape(22.dp)).background(colors.groupedCell)) {
                     quick.forEach { (label, at) ->
                         SheetRow(label, TimeFormat.sendLaterLabel(context, at), divider = true) { onPick(at) }
                     }
-                    SheetRow("Custom…", null, divider = false) { customStep = 1 }
+                    SheetRow("Custom…", null, divider = false) { custom = true }
                 }
             }
-        }
-        1 -> {
-            val dateState = rememberDatePickerState(
-                initialSelectedDateMillis = System.currentTimeMillis(),
-                selectableDates = object : androidx.compose.material3.SelectableDates {
-                    override fun isSelectableDate(utcTimeMillis: Long) =
-                        utcTimeMillis >= System.currentTimeMillis() - 86_400_000L
+        } else {
+            IosSheetBar(
+                title = "Send Later",
+                onCancel = { custom = false },
+                doneLabel = "Done",
+                onDone = {
+                    val at = chosenTime()
+                    if (at <= System.currentTimeMillis()) {
+                        IosDialogs.alert("Choose a Later Time", "Scheduled messages must be sent in the future.")
+                    } else {
+                        onPick(at)
+                    }
                 },
             )
-            DatePickerDialog(
-                onDismissRequest = onDismiss,
-                confirmButton = {
-                    TextButton(onClick = {
-                        pickedDay = dateState.selectedDateMillis
-                        customStep = 2
-                    }) { Text("Next", color = colors.accent) }
-                },
-                dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = colors.accent) } },
-            ) { DatePicker(state = dateState) }
-        }
-        else -> {
-            val now = Calendar.getInstance()
-            val timeState = rememberTimePickerState(now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE) + 5)
-            AlertDialog(
-                onDismissRequest = onDismiss,
-                containerColor = colors.groupedCell,
-                title = { Text("Choose a Time", style = IosType.headline) },
-                text = { TimePicker(state = timeState) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        // DatePicker returns UTC midnight; rebuild in local time.
-                        val utc = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
-                            timeInMillis = pickedDay ?: System.currentTimeMillis()
-                        }
-                        val at = Calendar.getInstance().apply {
-                            set(utc.get(Calendar.YEAR), utc.get(Calendar.MONTH), utc.get(Calendar.DAY_OF_MONTH), timeState.hour, timeState.minute, 0)
-                        }.timeInMillis
-                        if (at <= System.currentTimeMillis()) {
-                            Toast.makeText(context, "Pick a time in the future.", Toast.LENGTH_SHORT).show()
-                        } else {
-                            onPick(at)
-                        }
-                    }) { Text("Done", color = colors.accent, fontWeight = FontWeight.SemiBold) }
-                },
-                dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = colors.accent) } },
+            Text(
+                TimeFormat.sendLaterLabel(context, chosenTime()),
+                style = IosType.subheadline,
+                color = colors.secondaryText,
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp, bottom = 8.dp),
             )
+            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 36.dp)) {
+                IosWheelBand()
+                Row(Modifier.fillMaxWidth()) {
+                    IosWheel(dayLabels, day, { day = it }, Modifier.weight(2.3f), align = TextAlign.End)
+                    IosWheel(hours, hour12, { hour12 = it }, Modifier.weight(0.8f), align = TextAlign.End)
+                    IosWheel(minutes, minute, { minute = it }, Modifier.weight(0.9f))
+                    IosWheel(listOf("AM", "PM"), pm, { pm = it }, Modifier.weight(0.9f), align = TextAlign.Start)
+                }
+            }
         }
     }
 }
@@ -246,7 +252,7 @@ private val StickerSet = listOf(
 @Composable
 fun StickerSheet(onSend: (String) -> Unit, onDismiss: () -> Unit) {
     val colors = LiquidTheme.colors
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.groupedBackground) {
+    IosSheet(onDismiss = onDismiss) {
         Text("Stickers", style = IosType.title2, color = colors.primaryText, modifier = Modifier.padding(start = 20.dp, bottom = 8.dp))
         LazyVerticalGrid(
             columns = GridCells.Fixed(6),
@@ -319,18 +325,31 @@ fun ScheduledBubble(message: ScheduledMessage, onClick: () -> Unit) {
 fun rememberLocationSharer(onResult: (String) -> Unit): () -> Unit {
     val context = LocalContext.current
     val colors = LiquidTheme.colors
-    var showOff by remember { mutableStateOf(false) }
 
     fun fetch() {
         when (CurrentLocation.problem(context)) {
-            CurrentLocation.Problem.LOCATION_OFF -> { showOff = true; return }
+            CurrentLocation.Problem.LOCATION_OFF -> {
+                IosDialogs.alert(
+                    "Location Services Off",
+                    "Turn on Location Services to share where you are.",
+                    IosDialogs.Action("Cancel", IosDialogs.Role.CANCEL),
+                    IosDialogs.Action("Settings", IosDialogs.Role.PREFERRED) {
+                        runCatching {
+                            context.startActivity(
+                                Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }
+                    },
+                )
+                return
+            }
             CurrentLocation.Problem.NO_PERMISSION -> return
             null -> Unit
         }
-        Toast.makeText(context, "Finding your location…", Toast.LENGTH_SHORT).show()
+        IosDialogs.notice("Finding Location…", IosIcons.Location)
         CurrentLocation.request(context) { loc ->
             if (loc == null) {
-                Toast.makeText(context, "Couldn't find your location. Try again near a window or with Wi-Fi on.", Toast.LENGTH_LONG).show()
+                IosDialogs.alert("Location Not Found", "Try again near a window or with Wi-Fi turned on.")
             } else {
                 onResult(CurrentLocation.shareText(loc))
             }
@@ -339,28 +358,23 @@ fun rememberLocationSharer(onResult: (String) -> Unit): () -> Unit {
 
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
         if (grants.values.any { it }) fetch()
-        else Toast.makeText(context, "Location access is off for Messages. You can allow it in Settings.", Toast.LENGTH_LONG).show()
-    }
-
-    if (showOff) {
-        AlertDialog(
-            onDismissRequest = { showOff = false },
-            containerColor = colors.groupedCell,
-            title = { Text("Location Services Off", style = IosType.headline) },
-            text = { Text("Turn on Location to share where you are.", style = IosType.footnote) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showOff = false
-                    runCatching {
-                        context.startActivity(
-                            Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                        )
-                    }
-                }) { Text("Settings", color = colors.accent, fontWeight = FontWeight.SemiBold) }
+        else IosDialogs.alert(
+            "Location Access Off",
+            "Allow Messages to use your location in Settings.",
+            IosDialogs.Action("Cancel", IosDialogs.Role.CANCEL),
+            IosDialogs.Action("Settings", IosDialogs.Role.PREFERRED) {
+                runCatching {
+                    context.startActivity(
+                        Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                            .setData(android.net.Uri.fromParts("package", context.packageName, null))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
             },
-            dismissButton = { TextButton(onClick = { showOff = false }) { Text("Cancel", color = colors.accent) } },
         )
     }
+
+    
 
     return {
         if (CurrentLocation.hasPermission(context)) fetch()

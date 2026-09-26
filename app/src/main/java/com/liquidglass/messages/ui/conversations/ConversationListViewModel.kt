@@ -74,7 +74,10 @@ class ConversationListViewModel(
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = ConversationListUiState()
+            // The cached inbox paints the first frame instantly (no empty flash).
+            initialValue = repository.cachedConversations()
+                ?.let { ConversationListUiState(conversations = it, isLoading = false) }
+                ?: ConversationListUiState()
         )
 
     /** Updates the search query, re-triggering the combine above. */
@@ -90,6 +93,11 @@ class ConversationListViewModel(
     /** Marks every message in a thread read; clears its unread badge. */
     fun markRead(threadId: Long) {
         viewModelScope.launch { repository.markThreadRead(threadId) }
+    }
+
+    /** iOS "Mark as Unread". */
+    fun markUnread(threadId: Long) {
+        viewModelScope.launch { repository.markThreadUnread(threadId) }
     }
 
     /** Case-insensitive match on display name, raw address, and snippet. */

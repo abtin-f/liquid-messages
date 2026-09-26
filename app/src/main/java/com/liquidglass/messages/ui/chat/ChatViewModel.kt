@@ -146,6 +146,8 @@ class ChatViewModel(
                     ?: messages.lastOrNull { it.subscriptionId >= 0 }?.subscriptionId
                     ?: -1
                 _uiState.update { it.copy(messages = messages, subscriptionId = sub) }
+                // A message that arrives while the chat is open is read already.
+                if (visible && messages.any { !it.isOutgoing && !it.read }) markThreadRead()
             }
         }
     }
@@ -325,15 +327,34 @@ class ChatViewModel(
     /** Deletes one message (long-press menu → Delete). */
     fun deleteMessage(messageId: Long) {
         viewModelScope.launch {
+            // Goes to Recently Deleted; its reaction/effect stay for a recovery.
             repository.deleteMessage(messageId)
-            metaStore.clear(messageId)
         }
     }
 
-    /** Marks the whole thread read; safe to call before the id is resolved. */
+    @Volatile private var visible = false
+
+    /** Called on resume/pause of the chat screen. */
+    fun setVisible(on: Boolean) {
+        visible = on
+        if (on) {
+            if (threadId > 0L) ActiveChat.threadId = threadId
+            markThreadRead()
+        } else {
+            if (ActiveChat.threadId == threadId) ActiveChat.threadId = -1L
+            // Anything that slipped in while leaving is read too.
+            markThreadRead()
+        }
+    }
+
+    /** Marks the whole thread read (and clears its notification); safe before the id is resolved. */
     fun markThreadRead() {
         viewModelScope.launch {
-            if (threadId > 0L) repository.markThreadRead(threadId)
+            if (threadId > 0L) {
+                if (visible) ActiveChat.threadId = threadId
+                repository.markThreadRead(threadId)
+                runCatching { (appContext.applicationContext as com.liquidglass.messages.MessagesApplication).container.notificationHelper.cancelThread(threadId) }
+            }
         }
     }
 

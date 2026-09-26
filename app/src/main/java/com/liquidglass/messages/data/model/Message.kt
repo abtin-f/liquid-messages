@@ -37,6 +37,7 @@ enum class MessageStatus {
  * @param subscriptionId  SIM subscription id used (dual-SIM); -1 when unknown
  * @param read        whether the message has been read locally
  */
+@androidx.compose.runtime.Immutable
 data class Message(
     val id: Long,
     val threadId: Long,
@@ -70,6 +71,7 @@ data class Message(
  * One MMS part the UI can show: an image/video/audio/file, addressed by its
  * content:// uri (content://mms/part/<id> or a local file for drafts).
  */
+@androidx.compose.runtime.Immutable
 data class Attachment(
     val uri: String,
     val mimeType: String,

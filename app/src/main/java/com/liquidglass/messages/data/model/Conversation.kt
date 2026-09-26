@@ -13,6 +13,7 @@ package com.liquidglass.messages.data.model
  * @param isOutgoingSnippet  true when the latest message was sent by this device
  * @param photoUri        contact photo content uri string, or null
  */
+@androidx.compose.runtime.Immutable
 data class Conversation(
     val threadId: Long,
     val address: String,

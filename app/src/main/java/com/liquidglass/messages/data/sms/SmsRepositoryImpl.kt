@@ -41,10 +41,14 @@ class SmsRepositoryImpl(
     private val ioDispatcher: CoroutineDispatcher,
     private val mmsStore: MmsStore,
     private val mms: MmsCoordinator,
+    private val trash: com.liquidglass.messages.data.local.TrashStore? = null,
 ) : SmsRepository {
 
     private val appContext: Context = context.applicationContext
     private val resolver get() = appContext.contentResolver
+    private val inboxCache = com.liquidglass.messages.data.local.ConversationCache(appContext)
+
+    override fun cachedConversations(): List<Conversation>? = inboxCache.load()?.let(::visibleOnly)
 
     // --- permissions -------------------------------------------------------
 
@@ -60,13 +64,20 @@ class SmsRepositoryImpl(
         // Re-read and emit on every provider change; collisions are coalesced by
         // the single-capacity conflated channel so we never queue stale reads.
         suspend fun emitSnapshot() {
-            trySend(getConversations())
+            val fresh = getConversations()
+            trySend(fresh)
+            if (hasReadSms()) inboxCache.save(fresh)
         }
 
+        // Show the last known inbox immediately; the real read follows.
+        inboxCache.load()?.let { trySend(visibleOnly(it)) }
+
+        // One reader, debounced: a single send fires several provider
+        // notifications, which used to start several full reads in parallel.
+        val changes = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
-                // Hop back onto the flow's coroutine to do the suspending read.
-                launch { emitSnapshot() }
+                changes.trySend(Unit)
             }
         }
         // Observe both the unified mms-sms surface and plain sms, since OEMs
@@ -74,9 +85,17 @@ class SmsRepositoryImpl(
         resolver.registerContentObserver(Telephony.MmsSms.CONTENT_URI, true, observer)
         resolver.registerContentObserver(Telephony.Sms.CONTENT_URI, true, observer)
         resolver.registerContentObserver(CONVERSATIONS_URI, true, observer)
+        // Deleting / recovering changes what's visible without touching the provider.
+        trash?.let { t -> launch { t.state.collect { changes.trySend(Unit) } } }
 
-        // Prime the flow with an initial snapshot.
-        emitSnapshot()
+        launch {
+            emitSnapshot()
+            for (unit in changes) {
+                kotlinx.coroutines.delay(CHANGE_DEBOUNCE_MS)
+                changes.tryReceive()
+                emitSnapshot()
+            }
+        }
 
         awaitClose { resolver.unregisterContentObserver(observer) }
     }
@@ -87,7 +106,7 @@ class SmsRepositoryImpl(
         withContext(ioDispatcher) {
             if (!hasReadSms()) return@withContext emptyList()
             try {
-                readConversations()
+                visibleOnly(readConversations())
             } catch (_: SecurityException) {
                 emptyList()
             } catch (_: Exception) {
@@ -100,7 +119,98 @@ class SmsRepositoryImpl(
      * is more portable than the `?simple=true` thread summary, which several OEM
      * providers omit columns from, and lets us compute an accurate unread count.
      */
-    private suspend fun readConversations(): List<Conversation> {
+    private suspend fun readConversations(): List<Conversation> =
+        runCatching { readConversationsFast() }.getOrNull() ?: readConversationsByScan()
+
+    /**
+     * Fast path: the provider's own threads table already has one row per
+     * conversation (date, snippet, count, participants), so the inbox needs a
+     * handful of small queries instead of walking every message on the phone.
+     * Returns null when an OEM provider lacks the table or columns; the full
+     * scan below is then the fallback.
+     */
+    private suspend fun readConversationsFast(): List<Conversation>? {
+        class Row(val id: Long, val date: Long, val count: Int, val recipientIds: List<Long>, val snippet: String)
+
+        val rows = ArrayList<Row>()
+        resolver.query(
+            CONVERSATIONS_URI.buildUpon().appendQueryParameter("simple", "true").build(),
+            arrayOf("_id", "date", "message_count", "recipient_ids", "snippet"),
+            null, null, "date DESC",
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val count = c.getInt(2)
+                if (count <= 0) continue
+                rows += Row(
+                    id = c.getLong(0),
+                    date = c.getLong(1),
+                    count = count,
+                    recipientIds = c.getString(3)?.split(' ')?.mapNotNull { it.trim().toLongOrNull() }.orEmpty(),
+                    snippet = c.getString(4).orEmpty(),
+                )
+            }
+        } ?: return null
+        if (rows.isEmpty()) return null
+
+        val canonical = HashMap<Long, String>()
+        resolver.query(Uri.parse("content://mms-sms/canonical-addresses"), null, null, null, null)?.use { c ->
+            val idCol = c.getColumnIndex("_id")
+            val addrCol = c.getColumnIndex("address")
+            if (idCol >= 0 && addrCol >= 0) {
+                while (c.moveToNext()) canonical[c.getLong(idCol)] = c.getString(addrCol).orEmpty()
+            }
+        }
+
+        // Unread SMS per thread: only unread rows are touched.
+        val unread = HashMap<Long, Int>()
+        resolver.query(
+            Telephony.Sms.CONTENT_URI, arrayOf(SmsColumns.THREAD_ID),
+            "${SmsColumns.READ} = 0 AND ${SmsColumns.TYPE} = ${SmsColumns.MESSAGE_TYPE_INBOX}", null, null,
+        )?.use { c -> while (c.moveToNext()) unread.merge(c.getLong(0), 1, Int::plus) }
+
+        // Direction of the newest SMS per thread (preview colour), from recent rows only.
+        val outgoing = HashMap<Long, Boolean>()
+        resolver.query(
+            Telephony.Sms.CONTENT_URI, arrayOf(SmsColumns.THREAD_ID, SmsColumns.TYPE),
+            null, null, "${SmsColumns.DATE} DESC LIMIT 500",
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val t = c.getLong(0)
+                if (!outgoing.containsKey(t)) outgoing[t] = c.getInt(1) != SmsColumns.MESSAGE_TYPE_INBOX
+            }
+        }
+
+        val mmsSummaries = mmsStore.threadSummaries()
+        val result = ArrayList<Conversation>(rows.size)
+        for (row in rows) {
+            val recipients = row.recipientIds.mapNotNull { canonical[it]?.takeIf(String::isNotBlank) }
+            val address = recipients.firstOrNull() ?: continue
+            val mms = mmsSummaries[row.id]
+            // The threads table may hold an undecoded MMS subject; prefer our own
+            // MMS summary whenever an MMS is the newest message.
+            val mmsNewest = mms != null && mms.dateMillis >= row.date - 1000
+            val snippet = if (mmsNewest || row.snippet.isBlank()) mms?.snippet ?: row.snippet else row.snippet
+            val contact = contactsHelper.resolveContact(address)
+            result += Conversation(
+                threadId = row.id,
+                address = address,
+                contactName = contact.name,
+                snippet = snippet,
+                timestamp = maxOf(row.date, mms?.dateMillis ?: 0L),
+                unreadCount = (unread[row.id] ?: 0) + (mms?.unread ?: 0),
+                messageCount = row.count,
+                isOutgoingSnippet = if (mmsNewest) mms!!.outgoing else outgoing[row.id] ?: false,
+                photoUri = contact.photoUri,
+                recipients = recipients,
+                recipientNames = if (recipients.size > 1) recipients.map { contactsHelper.resolveContact(it).displayName } else emptyList(),
+            )
+        }
+        result.sortByDescending { it.timestamp }
+        return result
+    }
+
+    /** Portable fallback: builds the inbox by grouping every SMS row by thread. */
+    private suspend fun readConversationsByScan(): List<Conversation> {
         data class Acc(
             var address: String,
             var snippet: String,
@@ -112,15 +222,17 @@ class SmsRepositoryImpl(
 
         val byThread = LinkedHashMap<Long, Acc>()
 
+        // Scan without message bodies (the expensive column); only each
+        // thread's newest body is fetched afterwards, in one batched query.
         val projection = arrayOf(
             SmsColumns.ID,
             SmsColumns.THREAD_ID,
             SmsColumns.ADDRESS,
-            SmsColumns.BODY,
             SmsColumns.DATE,
             SmsColumns.TYPE,
             SmsColumns.READ
         )
+        val newestId = HashMap<Long, Long>()
 
         resolver.query(
             Telephony.Sms.CONTENT_URI,
@@ -134,7 +246,6 @@ class SmsRepositoryImpl(
                 if (threadId == 0L) continue
 
                 val address = cursor.getStringOrNull(SmsColumns.ADDRESS)?.trim().orEmpty()
-                val body = cursor.getStringOrNull(SmsColumns.BODY).orEmpty()
                 val date = cursor.getLongOrZero(SmsColumns.DATE)
                 val type = cursor.getIntOrDefault(SmsColumns.TYPE, SmsColumns.MESSAGE_TYPE_INBOX)
                 val read = cursor.getIntOrDefault(SmsColumns.READ, 1)
@@ -142,9 +253,10 @@ class SmsRepositoryImpl(
                 val acc = byThread[threadId]
                 if (acc == null) {
                     // First (newest, since DESC) row for this thread defines the snippet.
+                    newestId[threadId] = cursor.getLongOrZero(SmsColumns.ID)
                     byThread[threadId] = Acc(
                         address = address,
-                        snippet = body,
+                        snippet = "",
                         timestamp = date,
                         messageCount = 1,
                         unreadCount = if (type == SmsColumns.MESSAGE_TYPE_INBOX && read == 0) 1 else 0,
@@ -154,6 +266,24 @@ class SmsRepositoryImpl(
                     acc.messageCount += 1
                     if (acc.address.isEmpty() && address.isNotEmpty()) acc.address = address
                     if (type == SmsColumns.MESSAGE_TYPE_INBOX && read == 0) acc.unreadCount += 1
+                }
+            }
+        }
+
+        if (newestId.isNotEmpty()) {
+            val threadOf = newestId.entries.associate { (thread, id) -> id to thread }
+            threadOf.keys.chunked(400).forEach { ids ->
+                resolver.query(
+                    Telephony.Sms.CONTENT_URI,
+                    arrayOf(SmsColumns.ID, SmsColumns.BODY),
+                    "${SmsColumns.ID} IN (${ids.joinToString(",")})",
+                    null,
+                    null,
+                )?.use { c ->
+                    while (c.moveToNext()) {
+                        val thread = threadOf[c.getLongOrZero(SmsColumns.ID)] ?: continue
+                        byThread[thread]?.snippet = c.getStringOrNull(SmsColumns.BODY).orEmpty()
+                    }
                 }
             }
         }
@@ -220,16 +350,26 @@ class SmsRepositoryImpl(
             trySend(getMessages(threadId))
         }
 
+        val changes = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
-                launch { emitSnapshot() }
+                changes.trySend(Unit)
             }
         }
         resolver.registerContentObserver(Telephony.Sms.CONTENT_URI, true, observer)
         resolver.registerContentObserver(Telephony.MmsSms.CONTENT_URI, true, observer)
         resolver.registerContentObserver(Telephony.Mms.CONTENT_URI, true, observer)
+        trash?.let { t -> launch { t.state.collect { changes.trySend(Unit) } } }
 
-        emitSnapshot()
+        launch {
+            emitSnapshot()
+            for (unit in changes) {
+                // Shorter than the inbox: sent/delivered ticks should feel instant.
+                kotlinx.coroutines.delay(CHANGE_DEBOUNCE_MS / 2)
+                changes.tryReceive()
+                emitSnapshot()
+            }
+        }
 
         awaitClose { resolver.unregisterContentObserver(observer) }
     }
@@ -241,7 +381,10 @@ class SmsRepositoryImpl(
             if (!hasReadSms()) return@withContext emptyList()
             try {
                 // SMS and MMS live in separate tables; merge them into one timeline.
-                (readMessages(threadId) + mmsStore.readThread(threadId)).sortedBy { it.timestamp }
+                val t = trash?.state?.value
+                (readMessages(threadId) + mmsStore.readThread(threadId))
+                    .filter { t == null || !t.hides(threadId, it.id, it.timestamp) }
+                    .sortedBy { it.timestamp }
             } catch (_: SecurityException) {
                 emptyList()
             } catch (_: Exception) {
@@ -544,7 +687,106 @@ class SmsRepositoryImpl(
         }
     }
 
+    override suspend fun markThreadUnread(threadId: Long) {
+        withContext(ioDispatcher) {
+            runCatching {
+                // The newest received SMS in the thread becomes unread again.
+                val id = resolver.query(
+                    Telephony.Sms.CONTENT_URI,
+                    arrayOf(Telephony.Sms._ID),
+                    "${SmsColumns.THREAD_ID} = ? AND ${Telephony.Sms.TYPE} = ${Telephony.Sms.MESSAGE_TYPE_INBOX}",
+                    arrayOf(threadId.toString()),
+                    "${Telephony.Sms.DATE} DESC LIMIT 1",
+                )?.use { if (it.moveToFirst()) it.getLong(0) else null } ?: return@runCatching
+                resolver.update(
+                    ContentUris.withAppendedId(Telephony.Sms.CONTENT_URI, id),
+                    ContentValues().apply { put(Telephony.Sms.READ, 0) },
+                    null, null,
+                )
+            }
+        }
+    }
+
+    override suspend fun deleteOlderThan(cutoffMillis: Long): Int = withContext(ioDispatcher) {
+        runCatching {
+            val sms = resolver.delete(Telephony.Sms.CONTENT_URI, "${Telephony.Sms.DATE} < ?", arrayOf(cutoffMillis.toString()))
+            // MMS dates are stored in seconds.
+            val mms = resolver.delete(Telephony.Mms.CONTENT_URI, "${Telephony.Mms.DATE} < ?", arrayOf((cutoffMillis / 1000).toString()))
+            sms + mms
+        }.getOrDefault(0)
+    }
+
+    /** Hides conversations whose every message is in Recently Deleted. */
+    private fun visibleOnly(list: List<Conversation>): List<Conversation> {
+        val t = trash?.state?.value ?: return list
+        if (t.threads.isEmpty()) return list
+        return list.filter { c -> t.threads[c.threadId]?.let { c.timestamp > it.cutoff } ?: true }
+    }
+
     override suspend fun deleteThread(threadId: Long) {
+        val t = trash ?: return deleteThreadPermanently(threadId)
+        withContext(ioDispatcher) {
+            val snapshot = inboxCache.load()?.firstOrNull { it.threadId == threadId }
+            val address = snapshot?.address ?: getRecipients(threadId).firstOrNull().orEmpty()
+            val contact = if (address.isNotBlank()) contactsHelper.resolveContact(address) else null
+            val now = System.currentTimeMillis()
+            t.trashThread(
+                com.liquidglass.messages.data.local.TrashStore.TrashedThread(
+                    threadId = threadId,
+                    cutoff = maxOf(now, snapshot?.timestamp ?: 0L),
+                    deletedAt = now,
+                    address = address,
+                    name = snapshot?.let { if (it.isGroup) it.displayName else it.contactName } ?: contact?.name,
+                    snippet = snapshot?.snippet.orEmpty(),
+                    messageCount = snapshot?.messageCount ?: 0,
+                ),
+            )
+        }
+    }
+
+    override suspend fun restoreThread(threadId: Long) {
+        trash?.forgetThread(threadId)
+    }
+
+    override suspend fun restoreMessage(messageId: Long) {
+        trash?.forgetMessage(messageId)
+    }
+
+    override suspend fun purgeThread(threadId: Long) {
+        val entry = trash?.state?.value?.threads?.get(threadId) ?: return deleteThreadPermanently(threadId)
+        withContext(ioDispatcher) {
+            runCatching {
+                resolver.delete(
+                    Telephony.Sms.CONTENT_URI,
+                    "${SmsColumns.THREAD_ID} = ? AND ${SmsColumns.DATE} <= ?",
+                    arrayOf(threadId.toString(), entry.cutoff.toString()),
+                )
+                resolver.delete(
+                    Telephony.Mms.CONTENT_URI,
+                    "${Telephony.Mms.THREAD_ID} = ? AND ${Telephony.Mms.DATE} <= ?",
+                    arrayOf(threadId.toString(), (entry.cutoff / 1000).toString()),
+                )
+            }
+        }
+        // Individually deleted messages of that thread went with it.
+        val ids = trash.state.value.messages.values.filter { it.threadId == threadId }.map { it.messageId }
+        ids.forEach { deleteMessagePermanently(it) }
+        trash.forgetThread(threadId)
+    }
+
+    override suspend fun purgeMessage(messageId: Long) {
+        deleteMessagePermanently(messageId)
+        trash?.forgetMessage(messageId)
+    }
+
+    override suspend fun purgeExpired() {
+        val t = trash ?: return
+        val expired = t.expired()
+        expired.threads.keys.forEach { purgeThread(it) }
+        expired.messages.keys.forEach { purgeMessage(it) }
+    }
+
+    private suspend fun deleteThreadPermanently(threadId: Long) {
         withContext(ioDispatcher) {
             try {
                 // Preferred: dedicated conversations endpoint deletes MMS+SMS.
@@ -577,6 +819,37 @@ class SmsRepositoryImpl(
     }
 
     override suspend fun deleteMessage(messageId: Long) {
+        val t = trash ?: return deleteMessagePermanently(messageId)
+        withContext(ioDispatcher) {
+            // Snapshot the text and thread so Recently Deleted can list it.
+            val row: Triple<Long, String, String>? = runCatching {
+                if (Message.isMmsId(messageId)) {
+                    resolver.query(
+                        ContentUris.withAppendedId(Telephony.Mms.CONTENT_URI, messageId - Message.MMS_ID_OFFSET),
+                        arrayOf(Telephony.Mms.THREAD_ID), null, null, null,
+                    )?.use { c -> if (c.moveToFirst()) Triple(c.getLong(0), "", "MMS") else null }
+                } else {
+                    resolver.query(
+                        ContentUris.withAppendedId(Telephony.Sms.CONTENT_URI, messageId),
+                        arrayOf(SmsColumns.THREAD_ID, SmsColumns.ADDRESS, SmsColumns.BODY), null, null, null,
+                    )?.use { c -> if (c.moveToFirst()) Triple(c.getLong(0), c.getString(1).orEmpty(), c.getString(2).orEmpty()) else null }
+                }
+            }.getOrNull()
+            val threadId = row?.first ?: -1L
+            val address = row?.second?.ifBlank { null } ?: if (threadId > 0) getRecipients(threadId).firstOrNull().orEmpty() else ""
+            t.trashMessage(
+                com.liquidglass.messages.data.local.TrashStore.TrashedMessage(
+                    messageId = messageId,
+                    threadId = threadId,
+                    deletedAt = System.currentTimeMillis(),
+                    address = address,
+                    snippet = com.liquidglass.messages.data.model.MessageText.visible(row?.third.orEmpty()),
+                ),
+            )
+        }
+    }
+
+    private suspend fun deleteMessagePermanently(messageId: Long) {
         withContext(ioDispatcher) {
             try {
                 val uri = if (Message.isMmsId(messageId)) {
@@ -613,6 +886,9 @@ class SmsRepositoryImpl(
 
     private companion object {
         /** content://mms-sms/conversations — deletes/queries across MMS+SMS. */
+        /** Coalesces bursts of provider notifications into one re-read. */
+        const val CHANGE_DEBOUNCE_MS = 120L
+
         val CONVERSATIONS_URI: Uri =
             Uri.parse("content://mms-sms/conversations")
     }

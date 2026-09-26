@@ -1,9 +1,9 @@
 package com.liquidglass.messages.ui.chat
 
 import android.content.Context
+import com.liquidglass.messages.ui.components.IosDialogs
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -197,13 +197,13 @@ private fun exportable(context: Context, a: Attachment): Uri? = runCatching {
 fun openExternally(context: Context, a: Attachment) {
     val uri = exportable(context, a)
     if (uri == null) {
-        Toast.makeText(context, "Couldn't open this attachment.", Toast.LENGTH_SHORT).show()
+        IosDialogs.alert("Can't Open Attachment", "This attachment couldn't be opened.")
         return
     }
     val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, a.mimeType)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
     runCatching { context.startActivity(intent) }
-        .onFailure { Toast.makeText(context, "No app can open ${a.mimeType}.", Toast.LENGTH_SHORT).show() }
+        .onFailure { IosDialogs.alert("No App Available", "No app on this phone can open ${a.mimeType} files.") }
 }
 
 private fun share(context: Context, a: Attachment) {

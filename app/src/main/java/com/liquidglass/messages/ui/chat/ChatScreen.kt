@@ -1,9 +1,9 @@
 package com.liquidglass.messages.ui.chat
 
 import android.content.ClipData
+import com.liquidglass.messages.ui.components.IosDialogs
 import android.content.ClipboardManager
 import android.content.Context
-import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,7 +14,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.graphics.TransformOrigin
 import com.liquidglass.messages.appContainer
@@ -55,6 +54,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -120,6 +120,11 @@ fun ChatScreen(
     viewModel: ChatViewModel = viewModel(factory = ChatViewModel.factory(threadId, address)),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // While this chat is visible, incoming messages are read the moment they land.
+    androidx.lifecycle.compose.LifecycleResumeEffect(viewModel) {
+        viewModel.setVisible(true)
+        onPauseOrDispose { viewModel.setVisible(false) }
+    }
     val inputText by viewModel.inputText.collectAsStateWithLifecycle()
     val selectedEffect by viewModel.selectedEffect.collectAsStateWithLifecycle()
     val sendLaterAt by viewModel.sendLaterAt.collectAsStateWithLifecycle()
@@ -214,6 +219,20 @@ fun ChatContent(
     val context = LocalContext.current
     val density = LocalDensity.current
     val messages = state.messages
+    // Personalisation (absent in previews, where there's no Application).
+    val appSettings = (context.applicationContext as? com.liquidglass.messages.MessagesApplication)?.container?.appSettings
+    val globalWallpaper = appSettings?.wallpaper?.collectAsState()?.value ?: com.liquidglass.messages.data.local.ChatWallpaper.NONE
+    val threadWallpapers = (context.applicationContext as? com.liquidglass.messages.MessagesApplication)?.container?.threadPrefs
+        ?.wallpapers?.collectAsState()?.value.orEmpty()
+    val threadIdForBg = messages.firstOrNull()?.threadId
+    val wallpaper = threadIdForBg?.let { threadWallpapers[it] } ?: globalWallpaper
+    val photoBackground = threadIdForBg?.let { id ->
+        (context.applicationContext as? com.liquidglass.messages.MessagesApplication)?.container?.threadPrefs
+            ?.photoBackgrounds?.collectAsState()?.value?.get(id)
+    }
+    val autoPlayEffects = appSettings?.autoPlayEffects?.collectAsState()?.value ?: true
+    val swipeToReply = appSettings?.swipeToReply?.collectAsState()?.value ?: true
+    val wallpaperBrush = remember(wallpaper, colors.isDark) { com.liquidglass.messages.ui.theme.wallpaperBrush(wallpaper, colors.isDark) }
 
     var menuTarget by remember { mutableStateOf<Message?>(null) }
     val effectTriggers = remember { mutableStateMapOf<Long, Int>() }
@@ -243,7 +262,7 @@ fun ChatContent(
         val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.files", file)
         cameraTarget = uri
         runCatching { takePicture.launch(uri) }.onFailure {
-            Toast.makeText(context, "No camera app available.", Toast.LENGTH_SHORT).show()
+            IosDialogs.alert("Camera Unavailable", "No camera app is available on this phone.")
         }
     }
     var scheduledTarget by remember { mutableStateOf<ScheduledMessage?>(null) }
@@ -294,7 +313,8 @@ fun ChatContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.chatBackground),
+            .background(colors.chatBackground)
+            .then(if (wallpaperBrush != null) Modifier.background(wallpaperBrush) else Modifier),
     ) {
       // iOS blurs the whole conversation behind the tapback menu.
       val menuBlur by animateDpAsState(
@@ -309,8 +329,17 @@ fun ChatContent(
             Modifier
                 .fillMaxSize()
                 .backdropSource(backdrop)
-                .background(colors.chatBackground),
+                .background(colors.chatBackground)
+                .then(if (wallpaperBrush != null) Modifier.background(wallpaperBrush) else Modifier),
         ) {
+            if (photoBackground != null) {
+                coil.compose.AsyncImage(
+                    model = java.io.File(photoBackground),
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             // iOS caps bubbles at ~3/4 of the width, and never wider than ~420dp.
             val bubbleMaxFraction = minOf(0.78f, 420.dp / maxWidth)
 
@@ -337,7 +366,7 @@ fun ChatContent(
                             // text ("(Sent with … effect)") by the other phone.
                             val tagEffect = remember(msg.body) { com.liquidglass.messages.data.model.EffectTag.parse(msg.body).effect }
                             val effect = meta?.effect?.takeIf { it != MessageEffect.NONE } ?: tagEffect
-                            if (effect != MessageEffect.NONE && msg.id !in historyIds) {
+                            if (autoPlayEffects && effect != MessageEffect.NONE && msg.id !in historyIds) {
                                 LaunchedEffect(msg.id) {
                                     if (autoPlayed.add(msg.id)) {
                                         effectTriggers[msg.id] = (effectTriggers[msg.id] ?: 0) + 1
@@ -361,6 +390,7 @@ fun ChatContent(
                                     showStatus = row.showStatus,
                                     animatedIds = animatedIds,
                                     reaction = meta?.reaction,
+                                    theirReaction = meta?.theirReaction,
                                     effect = effect,
                                     effectTrigger = effectTriggers[msg.id] ?: 0,
                                     maxWidthFraction = bubbleMaxFraction,
@@ -393,7 +423,7 @@ fun ChatContent(
                                     highlighted = highlightId == msg.id,
                                 )
                             }
-                            SwipeToReply(onReply = { onReplyTo(msg) }) {
+                            SwipeToReply(onReply = { onReplyTo(msg) }, enabled = swipeToReply) {
                                 if (state.isGroup && !msg.isOutgoing) {
                                     // Group chats: the sender's avatar beside the last bubble of their run.
                                     Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(start = 8.dp)) {
@@ -425,7 +455,7 @@ fun ChatContent(
             onBack = onBack,
             onTitleClick = onTitleClick,
             onVideo = {
-                Toast.makeText(context, "Video calls aren't available yet", Toast.LENGTH_SHORT).show()
+                IosDialogs.alert("FaceTime Unavailable", "Video calls aren't available for text messages yet.")
             },
             modifier = Modifier.align(Alignment.TopCenter),
         )
@@ -512,11 +542,17 @@ fun ChatContent(
                     },
                     onCopy = {
                         copyToClipboard(context, com.liquidglass.messages.data.model.MessageText.visible(target.body))
+                        IosDialogs.notice("Copied", IosIcons.Copy)
                         menuTarget = null
                     },
                     onDelete = {
-                        onDelete(target.id)
                         menuTarget = null
+                        // iOS confirms with an action sheet before deleting a message.
+                        IosDialogs.actionSheet(
+                            null,
+                            "This message will be moved to Recently Deleted for 30 days.",
+                            IosDialogs.Action("Delete Message", IosDialogs.Role.DESTRUCTIVE) { onDelete(target.id) },
+                        )
                     },
                 )
             }
@@ -550,24 +586,15 @@ fun ChatContent(
     }
     viewing?.let { ImageViewer(it, onClose = { viewing = null }) }
     scheduledTarget?.let { msg ->
-        AlertDialog(
-            onDismissRequest = { scheduledTarget = null },
-            containerColor = colors.groupedCell,
-            title = { Text("Send Later", style = IosType.headline) },
-            text = { Text(TimeFormat.sendLaterLabel(context, msg.sendAt), style = IosType.footnote) },
-            confirmButton = {
-                TextButton(onClick = {
-                    onSendScheduledNow(msg.id)
-                    scheduledTarget = null
-                }) { Text("Send Now", color = colors.accent, fontWeight = FontWeight.SemiBold) }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    onCancelScheduled(msg.id)
-                    scheduledTarget = null
-                }) { Text("Delete Message", color = colors.destructive) }
-            },
-        )
+        LaunchedEffect(msg.id) {
+            scheduledTarget = null
+            IosDialogs.actionSheet(
+                "Send Later",
+                TimeFormat.sendLaterLabel(context, msg.sendAt),
+                IosDialogs.Action("Send Now") { onSendScheduledNow(msg.id) },
+                IosDialogs.Action("Delete Message", IosDialogs.Role.DESTRUCTIVE) { onCancelScheduled(msg.id) },
+            )
+        }
     }
 }
 

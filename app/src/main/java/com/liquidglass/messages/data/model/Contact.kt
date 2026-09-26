@@ -7,6 +7,7 @@ package com.liquidglass.messages.data.model
  * @param name      display name, or null if the number is not in contacts
  * @param photoUri  contact photo content uri string, or null
  */
+@androidx.compose.runtime.Immutable
 data class Contact(
     val number: String,
     val name: String? = null,

@@ -134,6 +134,8 @@ fun Modifier.liquidGlass(
     val tint = style.tint ?: when {
         style.menu && colors.isDark -> Color(0x9E1C1C1E)
         style.menu -> Color(0xA6FFFFFF)
+        colors.glassTinted && colors.isDark -> Color(0xA61C1C1E)
+        colors.glassTinted -> Color(0xC2F7F7F9)
         colors.isDark -> Color(0x40202024)
         else -> Color(0x59FFFFFF)
     }

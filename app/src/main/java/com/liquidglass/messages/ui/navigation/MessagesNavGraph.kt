@@ -69,6 +69,7 @@ fun MessagesNavGraph(
                     navController.navigate(Routes.chat(threadId, address))
                 },
                 onOpenSettings = { navController.navigate(Routes.settings) },
+                onOpenRecentlyDeleted = { navController.navigate(Routes.recentlyDeleted) },
             )
         }
 
@@ -126,6 +127,11 @@ fun MessagesNavGraph(
                 // The chat underneath no longer exists — go straight back to the list.
                 onConversationDeleted = { navController.popBackStack(Routes.conversations, inclusive = false) },
             )
+        }
+
+        // ---- Recently Deleted ----
+        composable(Routes.recentlyDeleted) {
+            com.liquidglass.messages.ui.deleted.RecentlyDeletedScreen(onBack = { navController.popBackStack() })
         }
 
         // ---- Settings ----

@@ -14,7 +14,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.lifecycleScope
+import com.liquidglass.messages.ui.components.IosDialogHost
 import com.liquidglass.messages.ui.navigation.MessagesNavGraph
+import kotlinx.coroutines.launch
 import com.liquidglass.messages.ui.onboarding.SetupScreen
 import com.liquidglass.messages.ui.theme.LiquidMessagesTheme
 import com.liquidglass.messages.ui.theme.LiquidTheme
@@ -96,6 +99,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             LiquidMessagesTheme {
                 Surface(color = LiquidTheme.colors.listBackground) {
+                  IosDialogHost {
                     if (!isDefaultSmsApp || !hasPermissions) {
                         SetupScreen(
                             isDefault = isDefaultSmsApp,
@@ -112,6 +116,7 @@ class MainActivity : ComponentActivity() {
                             startWithBody = pendingBody,
                         )
                     }
+                  }
                 }
             }
         }
@@ -122,7 +127,10 @@ class MainActivity : ComponentActivity() {
         // The user can change the default app / permissions from settings while
         // we're backgrounded, so re-sync whenever we return to the foreground.
         refreshGates()
-        if (isDefaultSmsApp) roleBlocked = false
+        if (isDefaultSmsApp) {
+            roleBlocked = false
+            pruneOldMessages()
+        }
         if (hasPermissions) permissionsBlocked = false
     }
 
@@ -134,6 +142,15 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         parseDeepLink(intent)
+    }
+
+    /** iOS "Keep Messages": drops anything older than the chosen window. */
+    private fun pruneOldMessages() {
+        // Recently Deleted keeps things for 30 days, then deletes them for good.
+        lifecycleScope.launch { appContainer.smsRepository.purgeExpired() }
+        val days = appContainer.appSettings.keepMessages.value.days ?: return
+        val cutoff = System.currentTimeMillis() - days * 86_400_000L
+        lifecycleScope.launch { appContainer.smsRepository.deleteOlderThan(cutoff) }
     }
 
     /** Re-reads the authoritative default-app + permission state into the gates. */

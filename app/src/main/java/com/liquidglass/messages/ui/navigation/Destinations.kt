@@ -21,6 +21,9 @@ object Routes {
     /** App settings (iPhone Settings › Messages equivalent). */
     const val settings: String = "settings"
 
+    /** iOS Messages › Recently Deleted. */
+    const val recentlyDeleted: String = "recently_deleted"
+
     /** Argument keys used by the chat destination. */
     const val argThreadId: String = "threadId"
     const val argAddress: String = "address"

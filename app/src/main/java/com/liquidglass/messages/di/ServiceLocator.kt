@@ -57,8 +57,14 @@ class ServiceLocator(private val appContext: Context) {
     /** Per-thread preferences (muted notification threads). */
     val threadPrefs: ThreadPrefs by lazy { ThreadPrefs(appContext) }
 
+    /** iOS "Recently Deleted" (30-day trash). */
+    val trash: com.liquidglass.messages.data.local.TrashStore by lazy {
+        com.liquidglass.messages.data.local.TrashStore(appContext)
+    }
+
     val smsRepository: SmsRepository by lazy {
         SmsRepositoryImpl(
+            trash = trash,
             context = appContext,
             sender = smsSender,
             contactsHelper = contactsHelper,

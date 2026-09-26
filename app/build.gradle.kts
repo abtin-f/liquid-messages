@@ -20,8 +20,8 @@ android {
         applicationId = "com.liquidglass.messages"
         minSdk = 24
         targetSdk = 34
-        versionCode = 170
-        versionName = "1.7.0"
+        versionCode = 180
+        versionName = "1.8.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -65,6 +65,11 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+        // Strong skipping: unchanged rows/bubbles skip recomposition and lambdas
+        // are remembered automatically, which removes most scroll/typing jank.
+        freeCompilerArgs += listOf(
+            "-P", "plugin:androidx.compose.compiler.plugins.kotlin:experimentalStrongSkipping=true",
+        )
     }
 
     buildFeatures {

@@ -27,6 +27,17 @@ private val blueBubbleDark = listOf(Color(0xFF2E9BFF), Color(0xFF0A78F5))
 private val greenBubbleLight = listOf(Color(0xFF4CD964), Color(0xFF30BE50))
 private val greenBubbleDark = listOf(Color(0xFF3FD45D), Color(0xFF28AE45))
 
+/** Sent-bubble gradient (top, bottom) for each colour choice. */
+fun sentBubbleFill(style: BubbleStyle, dark: Boolean): List<Color> = when (style) {
+    BubbleStyle.BLUE -> if (dark) blueBubbleDark else blueBubbleLight
+    BubbleStyle.GREEN -> if (dark) greenBubbleDark else greenBubbleLight
+    BubbleStyle.PURPLE -> if (dark) listOf(Color(0xFFC273F5), Color(0xFFA24FE0)) else listOf(Color(0xFFC77DFF), Color(0xFFAF52DE))
+    BubbleStyle.PINK -> if (dark) listOf(Color(0xFFFF5C8A), Color(0xFFE8335F)) else listOf(Color(0xFFFF6B93), Color(0xFFFF2D55))
+    BubbleStyle.ORANGE -> if (dark) listOf(Color(0xFFFFA940), Color(0xFFF08A00)) else listOf(Color(0xFFFFAE3D), Color(0xFFFF9500))
+    BubbleStyle.TEAL -> if (dark) listOf(Color(0xFF4FD1E0), Color(0xFF1FA8BF)) else listOf(Color(0xFF5AD4E6), Color(0xFF30B0C7))
+    BubbleStyle.GRAPHITE -> if (dark) listOf(Color(0xFF7C7C82), Color(0xFF5E5E64)) else listOf(Color(0xFF8E8E93), Color(0xFF6C6C70))
+}
+
 val iosReceivedLight = Color(0xFFE9E9EB)
 val iosReceivedDark = Color(0xFF262629)
 val iosBackgroundDark = Color(0xFF000000)
@@ -70,13 +81,16 @@ data class LiquidColors(
     /** Default contact avatar (no photo): iOS grey gradient. */
     val avatarTop: Color,
     val avatarBottom: Color,
+    /** iOS 26 "Tinted" Liquid Glass: frostier, more opaque controls. */
+    val glassTinted: Boolean = false,
 ) {
     val sentBubbleGradient: List<Color> get() = listOf(sentBubbleTop, sentBubbleBottom)
 }
 
-fun lightLiquidColors(style: BubbleStyle = BubbleStyle.BLUE): LiquidColors {
-    val sent = if (style == BubbleStyle.GREEN) greenBubbleLight else blueBubbleLight
+fun lightLiquidColors(style: BubbleStyle = BubbleStyle.BLUE, tinted: Boolean = false): LiquidColors {
+    val sent = sentBubbleFill(style, dark = false)
     return LiquidColors(
+        glassTinted = tinted,
         isDark = false,
         sentBubbleTop = sent[0],
         sentBubbleBottom = sent[1],
@@ -104,9 +118,10 @@ fun lightLiquidColors(style: BubbleStyle = BubbleStyle.BLUE): LiquidColors {
     )
 }
 
-fun darkLiquidColors(style: BubbleStyle = BubbleStyle.BLUE): LiquidColors {
-    val sent = if (style == BubbleStyle.GREEN) greenBubbleDark else blueBubbleDark
+fun darkLiquidColors(style: BubbleStyle = BubbleStyle.BLUE, tinted: Boolean = false): LiquidColors {
+    val sent = sentBubbleFill(style, dark = true)
     return LiquidColors(
+        glassTinted = tinted,
         isDark = true,
         sentBubbleTop = sent[0],
         sentBubbleBottom = sent[1],

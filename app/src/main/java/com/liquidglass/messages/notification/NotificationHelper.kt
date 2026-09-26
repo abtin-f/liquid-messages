@@ -69,6 +69,9 @@ class NotificationHelper(private val context: Context) {
             return
         }
 
+        // The conversation is open on screen: no banner (it's marked read there).
+        if (com.liquidglass.messages.ui.chat.ActiveChat.threadId == message.threadId) return
+
         // Respect a per-thread mute set from the contact-info sheet.
         if (context.appContainer.threadPrefs.isMuted(message.threadId)) return
 
@@ -84,10 +87,16 @@ class NotificationHelper(private val context: Context) {
         // "Me" is left without a name so the system labels it as the local user.
         val me = Person.Builder().setName("Me").build()
 
+        // iOS "Show Previews": Never hides the text everywhere; When Unlocked
+        // shows a redacted public version on the lock screen.
+        val previews = context.appContainer.appSettings.notificationPreviews.value
+        val shownBody = if (previews == com.liquidglass.messages.data.local.NotificationPreviews.NEVER) "Message" else
+            com.liquidglass.messages.data.model.MessageText.visible(message.body)
+
         val messagingStyle = NotificationCompat.MessagingStyle(me)
             .setConversationTitle(contact.displayName)
             .setGroupConversation(false)
-            .addMessage(message.body, message.timestamp, sender)
+            .addMessage(shownBody, message.timestamp, sender)
 
         // ---- Inline Reply action (RemoteInput) ----
         val remoteInput = RemoteInput.Builder(NotificationActions.KEY_REPLY_TEXT)
@@ -118,7 +127,7 @@ class NotificationHelper(private val context: Context) {
             .setSmallIcon(android.R.drawable.sym_action_chat)
             .setStyle(messagingStyle)
             .setContentTitle(contact.displayName)
-            .setContentText(message.body)
+            .setContentText(shownBody)
             .setContentIntent(
                 NotificationActions.openThreadPendingIntent(context, address, notificationId)
             )
@@ -128,6 +137,20 @@ class NotificationHelper(private val context: Context) {
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .addAction(replyAction)
             .addAction(markReadAction)
+        when (previews) {
+            com.liquidglass.messages.data.local.NotificationPreviews.ALWAYS ->
+                builder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            else -> {
+                builder.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                builder.setPublicVersion(
+                    NotificationCompat.Builder(context, CHANNEL_MESSAGES)
+                        .setSmallIcon(android.R.drawable.sym_action_chat)
+                        .setContentTitle("Messages")
+                        .setContentText("Notification")
+                        .build()
+                )
+            }
+        }
 
         // POST_NOTIFICATIONS already verified above; suppress the lint flag.
         try {

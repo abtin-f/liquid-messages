@@ -41,6 +41,11 @@
     <td align="center"><img src="docs/screenshots/new_message.png" width="230"><br><sub>پیام جدید</sub></td>
     <td align="center"><img src="docs/screenshots/reply.png" width="230"><br><sub>ریپلای</sub></td>
   </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/personalize.png" width="230"><br><sub>شخصی‌سازی</sub></td>
+    <td align="center"><img src="docs/screenshots/alert.png" width="230"><br><sub>هشدارهای iOS</sub></td>
+    <td align="center"><img src="docs/screenshots/recently_deleted.png" width="230"><br><sub>Recently Deleted</sub></td>
+  </tr>
 </table>
 
 <div dir="rtl">

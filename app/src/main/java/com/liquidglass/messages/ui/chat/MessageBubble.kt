@@ -79,7 +79,10 @@ fun MessageBubble(
     modifier: Modifier = Modifier,
     showStatus: Boolean = false,
     animatedIds: MutableSet<Long> = mutableSetOf(),
+    /** Our own tapback (blue badge, iMessage style). */
     reaction: Reaction? = null,
+    /** The other person's tapback (grey badge); we can't change it. */
+    theirReaction: Reaction? = null,
     effect: MessageEffect = MessageEffect.NONE,
     effectTrigger: Int = 0,
     onLongPress: () -> Unit = {},
@@ -191,7 +194,7 @@ fun MessageBubble(
             Box(
                 modifier = Modifier
                     .weight(1f, fill = false)
-                    .padding(top = if (reaction != null) 16.dp else 0.dp),
+                    .padding(top = if (reaction != null || theirReaction != null) 16.dp else 0.dp),
             ) {
                 EffectedBubble(
                     effect = effect,
@@ -229,13 +232,24 @@ fun MessageBubble(
                             }
                         }
 
+                        // iMessage stacks tapbacks on the corner: theirs grey, ours
+                        // blue and in front, nudged toward the bubble when both exist.
+                        val corner = if (outgoing) Alignment.TopStart else Alignment.TopEnd
+                        val dir = if (outgoing) -1 else 1
+                        if (theirReaction != null) {
+                            ReactionBadge(
+                                reaction = theirReaction,
+                                outgoing = outgoing,
+                                modifier = Modifier.align(corner).offset(x = (12 * dir).dp, y = (-18).dp),
+                            )
+                        }
                         if (reaction != null) {
+                            val shift = if (theirReaction != null) 12 * dir - 16 * dir else 12 * dir
                             ReactionBadge(
                                 reaction = reaction,
                                 outgoing = outgoing,
-                                modifier = Modifier
-                                    .align(if (outgoing) Alignment.TopStart else Alignment.TopEnd)
-                                    .offset(x = if (outgoing) (-12).dp else 12.dp, y = (-18).dp),
+                                mine = true,
+                                modifier = Modifier.align(corner).offset(x = shift.dp, y = (-18).dp),
                             )
                         }
                     }

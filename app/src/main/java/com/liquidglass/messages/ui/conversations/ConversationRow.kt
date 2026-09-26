@@ -24,27 +24,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.liquidglass.messages.data.model.Conversation
 import com.liquidglass.messages.ui.components.ContactAvatar
+import com.liquidglass.messages.ui.components.IosDialogs
 import com.liquidglass.messages.ui.components.IosIcons
 import com.liquidglass.messages.ui.theme.IosType
 import com.liquidglass.messages.ui.theme.LiquidTheme
@@ -53,22 +52,37 @@ import com.liquidglass.messages.util.TimeFormat
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/** Width of the red "Delete" action revealed by swiping a row left. */
-private val DeleteActionWidth = 84.dp
+/** Width of each swipe action button. */
+private val ActionWidth = 78.dp
 
 /** Leading gutter that holds the blue unread dot (iOS keeps it even when empty). */
 private val DotGutter = 22.dp
 private val AvatarSize = 42.dp
 
+private val PinYellow = Color(0xFFFFB800)
+private val AlertsIndigo = Color(0xFF5856D6)
+
+/** A coloured button revealed by swiping a row. */
+private data class SwipeAction(val label: String, val icon: ImageVector, val color: Color, val onClick: () -> Unit)
+
+/** The iOS confirmation shown before a conversation is deleted. */
+fun confirmDeleteConversation(onDelete: () -> Unit, onCancel: () -> Unit = {}) {
+    IosDialogs.alert(
+        "Delete Conversation?",
+        "This conversation will be moved to Recently Deleted. You can recover it there for 30 days.",
+        IosDialogs.Action("Cancel", IosDialogs.Role.CANCEL, onCancel),
+        IosDialogs.Action("Delete", IosDialogs.Role.DESTRUCTIVE, onDelete),
+    )
+}
+
 /**
  * One iOS Messages list row:
  *
- *  • [avatar]  Name                       9:41 AM ›
+ *  • [avatar]  Name                    🔕 9:41 AM ›
  *              Preview text on up to two lines…
  *
- * The blue dot marks unread threads. Swipe left to reveal Delete (with iOS's
- * confirmation), or long-press for the same action. A hairline separator is
- * inset to start under the text, as on iOS.
+ * Swipe right for Read/Unread and Pin, left for Hide Alerts and Delete
+ * (Delete asks first, like iOS); long-press opens the context menu.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -77,41 +91,63 @@ fun ConversationRow(
     onClick: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    muted: Boolean = false,
+    pinned: Boolean = false,
+    onLongPress: (() -> Unit)? = null,
+    onTogglePin: (() -> Unit)? = null,
+    onToggleMute: (() -> Unit)? = null,
+    onToggleRead: (() -> Unit)? = null,
 ) {
     val colors = LiquidTheme.colors
     val context = LocalContext.current
     val density = LocalDensity.current
+    val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
-
-    val maxReveal = with(density) { DeleteActionWidth.toPx() }
     val offsetX = remember { Animatable(0f) }
-    var confirmDelete by remember { mutableStateOf(false) }
 
-    fun settle(open: Boolean) {
-        scope.launch {
-            offsetX.animateTo(if (open) -maxReveal else 0f, spring(dampingRatio = 0.85f, stiffness = 500f))
+    fun close() {
+        scope.launch { offsetX.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 500f)) }
+    }
+
+    val leading = buildList {
+        onToggleRead?.let {
+            add(SwipeAction(if (conversation.hasUnread) "Read" else "Unread", IosIcons.Envelope, colors.accent) { close(); it() })
         }
+        onTogglePin?.let {
+            add(SwipeAction(if (pinned) "Unpin" else "Pin", if (pinned) IosIcons.PinSlash else IosIcons.Pin, PinYellow) { close(); it() })
+        }
+    }
+    val trailing = buildList {
+        onToggleMute?.let {
+            add(SwipeAction(if (muted) "Show Alerts" else "Hide Alerts", if (muted) IosIcons.Bell else IosIcons.BellSlash, AlertsIndigo) { close(); it() })
+        }
+        add(SwipeAction("Delete", IosIcons.Trash, colors.destructive) {
+            confirmDeleteConversation(onDelete = onDelete, onCancel = ::close)
+        })
+    }
+    val leadMax = with(density) { ActionWidth.toPx() } * leading.size
+    val trailMax = with(density) { ActionWidth.toPx() } * trailing.size
+
+    fun settle(velocity: Float) {
+        val x = offsetX.value
+        val target = when {
+            x > 0 && (x > leadMax / 2 || velocity > 1200f) -> leadMax
+            x < 0 && (x < -trailMax / 2 || velocity < -1200f) -> -trailMax
+            else -> 0f
+        }
+        if (target != 0f) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        scope.launch { offsetX.animateTo(target, spring(dampingRatio = 0.85f, stiffness = 500f)) }
     }
 
     Box(modifier = modifier.fillMaxWidth()) {
-        // Red action underneath the row.
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(colors.destructive),
-            contentAlignment = Alignment.CenterEnd,
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(DeleteActionWidth)
-                    .fillMaxHeight()
-                    .clickable { confirmDelete = true },
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(IosIcons.Trash, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
-                    Text("Delete", style = IosType.footnote, color = Color.White)
-                }
+        // Swipe actions underneath the row: leading from the left, trailing on the right.
+        Row(Modifier.matchParentSize()) {
+            if (offsetX.value > 0f) {
+                leading.forEach { ActionButton(it) }
+                Spacer(Modifier.weight(1f).fillMaxHeight().background(leading.lastOrNull()?.color ?: Color.Transparent))
+            } else if (offsetX.value < 0f) {
+                Spacer(Modifier.weight(1f).fillMaxHeight().background(trailing.firstOrNull()?.color ?: Color.Transparent))
+                trailing.forEach { ActionButton(it) }
             }
         }
 
@@ -124,20 +160,26 @@ fun ConversationRow(
                     orientation = Orientation.Horizontal,
                     state = rememberDraggableState { delta ->
                         scope.launch {
-                            offsetX.snapTo((offsetX.value + delta).coerceIn(-maxReveal * 1.3f, 0f))
+                            val x = offsetX.value + delta
+                            // Rubber-band past the last button, like UITableView.
+                            val limited = when {
+                                x > leadMax -> leadMax + (x - leadMax) * 0.3f
+                                x < -trailMax -> -trailMax + (x + trailMax) * 0.3f
+                                else -> x
+                            }
+                            offsetX.snapTo(limited.coerceIn(-trailMax * 1.4f, leadMax * 1.4f))
                         }
                     },
-                    onDragStopped = { velocity ->
-                        settle(open = offsetX.value < -maxReveal / 2 || velocity < -1200f)
-                    },
+                    onDragStopped = { velocity -> settle(velocity) },
                 )
                 .combinedClickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = androidx.compose.foundation.LocalIndication.current,
-                    onClick = {
-                        if (offsetX.value != 0f) settle(open = false) else onClick()
+                    onClick = { if (offsetX.value != 0f) close() else onClick() },
+                    onLongClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (onLongPress != null) onLongPress() else confirmDeleteConversation(onDelete)
                     },
-                    onLongClick = { confirmDelete = true },
                 )
                 .heightIn(min = 76.dp)
                 .padding(end = 16.dp, top = 10.dp, bottom = 10.dp),
@@ -145,7 +187,7 @@ fun ConversationRow(
         ) {
             Box(Modifier.width(DotGutter), contentAlignment = Alignment.Center) {
                 if (conversation.hasUnread) {
-                    Box(Modifier.size(10.dp).background(colors.accent, CircleShape))
+                    Box(Modifier.size(10.dp).background(if (muted) colors.tertiaryText else colors.accent, CircleShape))
                 }
             }
 
@@ -172,6 +214,14 @@ fun ConversationRow(
                         modifier = Modifier.weight(1f),
                     )
                     Spacer(Modifier.width(8.dp))
+                    if (muted) {
+                        Icon(
+                            IosIcons.BellSlash,
+                            contentDescription = "Alerts hidden",
+                            tint = colors.secondaryText,
+                            modifier = Modifier.padding(end = 4.dp).size(14.dp),
+                        )
+                    }
                     Text(
                         text = TimeFormat.conversationStamp(context, conversation.timestamp),
                         style = IosType.subheadline,
@@ -186,12 +236,7 @@ fun ConversationRow(
                     )
                 }
                 Text(
-                    text = remember(conversation.snippet) {
-                        val visible = com.liquidglass.messages.data.model.MessageText.visible(conversation.snippet)
-                        val loc = com.liquidglass.messages.data.location.LocationLink.parse(visible)
-                        if (loc == null) visible
-                        else loc.remainingText.ifBlank { "📍 " + (loc.label ?: "Location") }
-                    },
+                    text = remember(conversation.snippet) { snippetText(conversation.snippet) },
                     style = IosType.subheadline,
                     fontFamily = fontFamilyFor(conversation.snippet),
                     fontWeight = FontWeight.Normal,
@@ -212,28 +257,29 @@ fun ConversationRow(
                 .background(colors.divider),
         )
     }
+}
 
-    if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = {
-                confirmDelete = false
-                settle(open = false)
-            },
-            title = { Text("Delete Conversation?", style = IosType.headline) },
-            text = { Text("This conversation will be deleted from this device.", style = IosType.footnote) },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDelete = false
-                    onDelete()
-                }) { Text("Delete", color = colors.destructive, style = IosType.body, fontWeight = FontWeight.SemiBold) }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    confirmDelete = false
-                    settle(open = false)
-                }) { Text("Cancel", color = colors.accent, style = IosType.body) }
-            },
-            containerColor = colors.groupedCell,
-        )
+/** List preview text: metadata lines stripped, locations shown as "📍 Label". */
+internal fun snippetText(snippet: String): String {
+    val visible = com.liquidglass.messages.data.model.MessageText.visible(snippet)
+    val loc = com.liquidglass.messages.data.location.LocationLink.parse(visible)
+    return if (loc == null) visible else loc.remainingText.ifBlank { "📍 " + (loc.label ?: "Location") }
+}
+
+@Composable
+private fun ActionButton(action: SwipeAction) {
+    Box(
+        modifier = Modifier
+            .width(ActionWidth)
+            .fillMaxHeight()
+            .background(action.color)
+            .clickable(onClick = action.onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(action.icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.height(3.dp))
+            Text(action.label, style = IosType.caption1, fontWeight = FontWeight.Medium, color = Color.White, maxLines = 1)
+        }
     }
 }

@@ -18,6 +18,9 @@ interface SmsRepository {
     /** Emits the conversation list, newest first, and re-emits on any change. */
     fun observeConversations(): Flow<List<Conversation>>
 
+    /** The inbox as last shown (disk cache), for an instant first frame; null if none. */
+    fun cachedConversations(): List<Conversation>? = null
+
     /** Emits messages in [threadId] oldest-first, and re-emits on any change. */
     fun observeMessages(threadId: Long): Flow<List<Message>>
 
@@ -76,10 +79,31 @@ interface SmsRepository {
     /** Marks every message in [threadId] as read. */
     suspend fun markThreadRead(threadId: Long)
 
-    /** Deletes an entire conversation thread. */
+    /** iOS "Mark as Unread": flags the newest incoming message unread again. */
+    suspend fun markThreadUnread(threadId: Long) {}
+
+    /** iOS "Keep Messages": deletes every SMS/MMS older than [cutoffMillis]; returns rows removed. */
+    suspend fun deleteOlderThan(cutoffMillis: Long): Int = 0
+
+    /** Recently Deleted: brings a deleted conversation back. */
+    suspend fun restoreThread(threadId: Long) {}
+
+    /** Recently Deleted: brings a deleted message back. */
+    suspend fun restoreMessage(messageId: Long) {}
+
+    /** Recently Deleted › Delete: removes a deleted conversation's messages for good. */
+    suspend fun purgeThread(threadId: Long) {}
+
+    /** Recently Deleted › Delete: removes a deleted message for good. */
+    suspend fun purgeMessage(messageId: Long) {}
+
+    /** Permanently removes everything that has been in Recently Deleted for 30 days. */
+    suspend fun purgeExpired() {}
+
+    /** Moves an entire conversation to Recently Deleted. */
     suspend fun deleteThread(threadId: Long)
 
-    /** Deletes a single message row. */
+    /** Moves a single message to Recently Deleted. */
     suspend fun deleteMessage(messageId: Long)
 
     /** Returns (creating if needed) the thread id for a recipient address. */

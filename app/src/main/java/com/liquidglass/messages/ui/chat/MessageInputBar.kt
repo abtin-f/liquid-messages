@@ -1,9 +1,9 @@
 package com.liquidglass.messages.ui.chat
 
 import android.app.Activity
+import com.liquidglass.messages.ui.components.IosDialogs
 import android.content.Intent
 import android.speech.RecognizerIntent
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -110,7 +110,7 @@ fun MessageInputBar(
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
         runCatching { voiceLauncher.launch(intent) }.onFailure {
-            Toast.makeText(context, "Dictation isn't available on this device.", Toast.LENGTH_SHORT).show()
+            IosDialogs.alert("Dictation Unavailable", "Dictation isn't available on this phone.")
         }
     }
 

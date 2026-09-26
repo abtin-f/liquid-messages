@@ -22,8 +22,8 @@ import kotlin.math.abs
  *    token is parsed, matched to the corresponding local message, applied to the
  *    [MessageMetaStore], and suppressed (never persisted or shown).
  *
- * Reactions converge last-writer-wins, so both devices end on the same value and
- * the existing single-badge UI stays correct. Every send is user-initiated (a
+ * Each side owns its own tapback: an incoming one is stored separately
+ * ([MessageMetaStore.setTheirReaction]) and shown next to ours, never over it. Every send is user-initiated (a
  * tap) and routed through the same [com.liquidglass.messages.util.SmsGuard] as
  * normal messages; nothing is sent silently or automatically, and an inbound
  * reaction never triggers an outbound one (no echo loop).
@@ -93,12 +93,12 @@ class ReactionSyncManager(
             val target = findTarget(threadId, parsed)
             if (target != null) {
                 when (parsed.op) {
+                    // Their tapback lives in its own slot: it never replaces
+                    // ours, and we can't change it — exactly like iMessage.
                     ReactionProtocol.Op.ADD ->
-                        metaStore.setReaction(target.id, parsed.reaction)
+                        metaStore.setTheirReaction(target.id, parsed.reaction)
                     ReactionProtocol.Op.REMOVE ->
-                        // Clear unconditionally so both devices converge — the sender
-                        // debounces to the settled state before transmitting REMOVE.
-                        metaStore.setReaction(target.id, null)
+                        metaStore.setTheirReaction(target.id, null)
                 }
             } else {
                 Log.w(TAG, "Reaction target not found (ref=${parsed.bodyRef})")

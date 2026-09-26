@@ -12,7 +12,10 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import com.liquidglass.messages.MessagesApplication
+import com.liquidglass.messages.data.local.AppearanceMode
 import com.liquidglass.messages.data.local.BubbleStyle
+import com.liquidglass.messages.data.local.GlassLook
+import com.liquidglass.messages.data.local.TextSize
 import com.liquidglass.messages.ui.components.LocalShowContactPhotos
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -51,18 +54,39 @@ object LiquidTheme {
 
 @Composable
 fun LiquidMessagesTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    /** Forces light/dark (previews, tests); null follows the Appearance setting. */
+    darkTheme: Boolean? = null,
     content: @Composable () -> Unit
 ) {
-    // Sent-bubble colour follows the user's setting (blue iMessage / green SMS).
-    // Previews have no Application, so they fall back to blue.
+    // Bubble colour, appearance, glass look and text size follow Settings.
+    // Previews have no Application, so they fall back to the defaults.
     val view = LocalView.current
     val settings = if (view.isInEditMode) null else
         (view.context.applicationContext as? MessagesApplication)?.container?.appSettings
     val bubbleStyle = settings?.bubbleStyle?.collectAsState()?.value ?: BubbleStyle.BLUE
     val showPhotos = settings?.showContactPhotos?.collectAsState()?.value ?: true
-    val liquidColors = remember(darkTheme, bubbleStyle) {
-        if (darkTheme) darkLiquidColors(bubbleStyle) else lightLiquidColors(bubbleStyle)
+    val appearance = settings?.appearance?.collectAsState()?.value ?: AppearanceMode.SYSTEM
+    val tinted = (settings?.glassLook?.collectAsState()?.value ?: GlassLook.CLEAR) == GlassLook.TINTED
+    val textScale = (settings?.textSize?.collectAsState()?.value ?: TextSize.DEFAULT).scale
+    val systemDark = isSystemInDarkTheme()
+    val hapticsOn = settings?.haptics?.collectAsState()?.value ?: true
+    val baseHaptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val haptics = remember(baseHaptics, hapticsOn) {
+        if (hapticsOn) baseHaptics else object : androidx.compose.ui.hapticfeedback.HapticFeedback {
+            override fun performHapticFeedback(hapticFeedbackType: androidx.compose.ui.hapticfeedback.HapticFeedbackType) = Unit
+        }
+    }
+    val darkTheme = darkTheme ?: when (appearance) {
+        AppearanceMode.SYSTEM -> systemDark
+        AppearanceMode.LIGHT -> false
+        AppearanceMode.DARK -> true
+    }
+    val liquidColors = remember(darkTheme, bubbleStyle, tinted) {
+        if (darkTheme) darkLiquidColors(bubbleStyle, tinted) else lightLiquidColors(bubbleStyle, tinted)
+    }
+    val baseDensity = androidx.compose.ui.platform.LocalDensity.current
+    val density = remember(baseDensity, textScale) {
+        androidx.compose.ui.unit.Density(baseDensity.density, baseDensity.fontScale * textScale)
     }
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
 
@@ -78,6 +102,8 @@ fun LiquidMessagesTheme(
     CompositionLocalProvider(
         LocalLiquidColors provides liquidColors,
         LocalShowContactPhotos provides showPhotos,
+        androidx.compose.ui.platform.LocalDensity provides density,
+        androidx.compose.ui.platform.LocalHapticFeedback provides haptics,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

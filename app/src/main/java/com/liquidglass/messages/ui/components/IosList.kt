@@ -67,6 +67,9 @@ fun IosGroupedPage(
     backLabel: String? = null,
     /** Small title shown in the bar once scrolled (defaults to [title]). */
     barTitle: String = title,
+    /** Optional trailing glass button in the bar (iOS "Edit"). */
+    trailingLabel: String? = null,
+    onTrailing: () -> Unit = {},
     content: LazyListScope.() -> Unit,
 ) {
     val colors = LiquidTheme.colors
@@ -120,6 +123,16 @@ fun IosGroupedPage(
                     GlassCapsule(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart).height(44.dp)) {
                         Text(
                             text = backLabel,
+                            style = IosType.body,
+                            color = colors.primaryText,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
+                }
+                if (trailingLabel != null) {
+                    GlassCapsule(onClick = onTrailing, modifier = Modifier.align(Alignment.CenterEnd).height(44.dp)) {
+                        Text(
+                            text = trailingLabel,
                             style = IosType.body,
                             color = colors.primaryText,
                             modifier = Modifier.padding(horizontal = 16.dp),

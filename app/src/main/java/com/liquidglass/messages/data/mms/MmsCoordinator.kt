@@ -1,5 +1,6 @@
 package com.liquidglass.messages.data.mms
 
+import com.liquidglass.messages.appContainer
 import android.content.ContentUris
 import android.content.Context
 import android.graphics.Bitmap
@@ -131,7 +132,10 @@ class MmsCoordinator(
         }
         val textBytes = parts.sumOf { it.data.size }
         val perAttachment = if (attachments.isEmpty()) 0 else (budget - textBytes - 2_000) / attachments.size
-        attachments.forEach { uri -> readAttachment(uri, perAttachment)?.let(parts::add) }
+        // iOS "Low Quality Image Mode": much smaller photos.
+        val low = runCatching { appContext.appContainer.appSettings.lowQualityImages.value }.getOrDefault(false)
+        val imageBudget = if (low) minOf(perAttachment, 120_000) else perAttachment
+        attachments.forEach { uri -> readAttachment(uri, imageBudget)?.let(parts::add) }
         if (parts.isEmpty()) return false
 
         val threadId = runCatching { Telephony.Threads.getOrCreateThreadId(appContext, recipients.toSet()) }.getOrDefault(-1L)

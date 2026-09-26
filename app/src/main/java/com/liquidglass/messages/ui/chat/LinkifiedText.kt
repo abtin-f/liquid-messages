@@ -1,13 +1,13 @@
 package com.liquidglass.messages.ui.chat
 
 import android.content.ActivityNotFoundException
+import com.liquidglass.messages.ui.components.IosDialogs
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.text.SpannableString
 import android.text.style.URLSpan
 import android.text.util.Linkify
-import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
@@ -91,8 +91,8 @@ private fun open(context: Context, url: String) {
     try {
         context.startActivity(intent)
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(context, "No app can open this link.", Toast.LENGTH_SHORT).show()
+        IosDialogs.alert("Can't Open Link", "No app on this phone can open this link.")
     } catch (_: SecurityException) {
-        Toast.makeText(context, "No app can open this link.", Toast.LENGTH_SHORT).show()
+        IosDialogs.alert("Can't Open Link", "No app on this phone can open this link.")
     }
 }

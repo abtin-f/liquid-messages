@@ -33,6 +33,61 @@ class ContactsHelper(private val context: Context) {
         override fun removeEldestEntry(eldest: Map.Entry<String, Contact>): Boolean = size > MAX_CACHE
     }
 
+    /**
+     * Every phone number in the address book, keyed by its last 10 digits
+     * (so "+98 912..." and "0912..." meet). Built with ONE query the first time a
+     * lookup needs it, instead of one PhoneLookup query per conversation, which
+     * is the difference between an instant inbox and a multi-second one.
+     * Dropped whenever the address book changes.
+     */
+    @Volatile private var index: Map<String, Contact>? = null
+    private val indexLock = Any()
+    private var observing = false
+
+    private fun key(number: String): String {
+        val digits = number.filter { it.isDigit() }
+        return if (digits.length > 10) digits.takeLast(10) else digits
+    }
+
+    private fun contactIndex(): Map<String, Contact> {
+        index?.let { return it }
+        synchronized(indexLock) {
+            index?.let { return it }
+            val map = HashMap<String, Contact>()
+            runCatching {
+                resolver.query(
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    arrayOf(
+                        ContactsContract.CommonDataKinds.Phone.NUMBER,
+                        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                        ContactsContract.CommonDataKinds.Phone.PHOTO_URI,
+                    ),
+                    null, null, null,
+                )?.use { c ->
+                    while (c.moveToNext()) {
+                        val number = c.getString(0) ?: continue
+                        val k = key(number)
+                        if (k.length < 5 || map.containsKey(k)) continue
+                        map[k] = Contact(number = number, name = c.getString(1), photoUri = c.getString(2))
+                    }
+                }
+            }
+            if (!observing) {
+                observing = true
+                runCatching {
+                    resolver.registerContentObserver(
+                        ContactsContract.Contacts.CONTENT_URI, true,
+                        object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+                            override fun onChange(selfChange: Boolean) = clearCache()
+                        },
+                    )
+                }
+            }
+            index = map
+            return map
+        }
+    }
+
     private fun hasContactsPermission(): Boolean =
         ContextCompat.checkSelfPermission(
             context,
@@ -58,7 +113,10 @@ class ContactsHelper(private val context: Context) {
         }
 
         val resolved = withContext(Dispatchers.IO) {
-            queryPhoneLookup(number)
+            val k = key(number)
+            // Fast path: the in-memory address book; short codes use PhoneLookup.
+            if (k.length >= 5) contactIndex()[k]?.copy(number = number)
+            else queryPhoneLookup(number)
         } ?: Contact(number = number)
 
         synchronized(cache) { cache[number] = resolved }
@@ -166,6 +224,7 @@ class ContactsHelper(private val context: Context) {
     /** Drops cached lookups; call after the user grants READ_CONTACTS. */
     fun clearCache() {
         synchronized(cache) { cache.clear() }
+        index = null
     }
 
     companion object {

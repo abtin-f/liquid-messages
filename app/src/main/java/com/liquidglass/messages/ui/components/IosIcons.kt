@@ -394,4 +394,123 @@ object IosIcons {
             close()
         }
     }
+
+    /** pin.fill — pinned conversations. */
+    val Pin: ImageVector by lazy {
+        icon("pin.fill", fill = true) {
+            moveTo(8f, 3f); lineTo(16f, 3f); lineTo(15f, 5f); lineTo(15f, 10f); lineTo(18f, 13.5f); lineTo(18f, 15f); lineTo(12.8f, 15f)
+            lineTo(12f, 22f); lineTo(11.2f, 15f); lineTo(6f, 15f); lineTo(6f, 13.5f); lineTo(9f, 10f); lineTo(9f, 5f); close()
+        }
+    }
+
+    /** pin.slash — unpin. */
+    val PinSlash: ImageVector by lazy {
+        icon("pin.slash", strokeWidth = 1.7f) {
+            moveTo(8f, 3f); lineTo(16f, 3f); lineTo(15f, 5f); lineTo(15f, 10f); lineTo(18f, 13.5f); lineTo(18f, 15f); lineTo(6f, 15f); lineTo(6f, 13.5f); lineTo(9f, 10f); lineTo(9f, 5f); close()
+            moveTo(12f, 15f); lineTo(12f, 21.5f)
+            moveTo(4f, 3.5f); lineTo(20f, 19.5f)
+        }
+    }
+
+    /** line.3.horizontal.decrease — filters. */
+    val Filter: ImageVector by lazy {
+        icon("line.3.horizontal.decrease", strokeWidth = 2f) {
+            moveTo(4f, 7f); lineTo(20f, 7f)
+            moveTo(7f, 12f); lineTo(17f, 12f)
+            moveTo(10f, 17f); lineTo(14f, 17f)
+        }
+    }
+
+    /** circle.lefthalf.filled — appearance. */
+    val Appearance: ImageVector by lazy {
+        icon("circle.lefthalf.filled", fill = true) {
+            moveTo(12f, 3f); arcTo(9f, 9f, 0f, true, true, 11.99f, 3f); close()
+            moveTo(12f, 4.8f); lineTo(12f, 19.2f); arcTo(7.2f, 7.2f, 0f, false, false, 12f, 4.8f); close()
+        }
+    }
+
+    /** textformat.size — text size. */
+    val TextSize: ImageVector by lazy {
+        icon("textformat.size", strokeWidth = 1.9f) {
+            moveTo(3f, 19f); lineTo(8.5f, 5f); lineTo(14f, 19f)
+            moveTo(5f, 14f); lineTo(12f, 14f)
+            moveTo(14.5f, 19f); lineTo(17.5f, 11f); lineTo(20.5f, 19f)
+            moveTo(15.6f, 16.2f); lineTo(19.4f, 16.2f)
+        }
+    }
+
+    /** paintbrush.fill — bubble colour. */
+    val Paintbrush: ImageVector by lazy {
+        icon("paintbrush.fill", fill = true) {
+            moveTo(20.5f, 3.5f); curveTo(19.5f, 2.6f, 18.3f, 3f, 17.3f, 4f); lineTo(10.5f, 11.8f); lineTo(12.2f, 13.5f); lineTo(20f, 6.7f)
+            curveTo(21f, 5.7f, 21.4f, 4.5f, 20.5f, 3.5f); close()
+            moveTo(9.3f, 13f); curveTo(7f, 12.8f, 5.3f, 14.5f, 5f, 16.5f); curveTo(4.8f, 18f, 4f, 19.2f, 3f, 19.8f)
+            curveTo(6f, 21.2f, 10.7f, 20.5f, 11f, 15f); close()
+        }
+    }
+
+    /** photo.on.rectangle — wallpaper. */
+    val Wallpaper: ImageVector by lazy {
+        icon("photo", strokeWidth = 1.7f) {
+            moveTo(5f, 4f); lineTo(19f, 4f); arcTo(2f, 2f, 0f, false, true, 21f, 6f); lineTo(21f, 18f); arcTo(2f, 2f, 0f, false, true, 19f, 20f)
+            lineTo(5f, 20f); arcTo(2f, 2f, 0f, false, true, 3f, 18f); lineTo(3f, 6f); arcTo(2f, 2f, 0f, false, true, 5f, 4f); close()
+            moveTo(3.5f, 17f); lineTo(9f, 11.5f); lineTo(13f, 15.5f); lineTo(15.5f, 13f); lineTo(20.5f, 18f)
+            moveTo(16f, 8f); lineTo(16f, 8.1f)
+        }
+    }
+
+    /** eye — previews. */
+    val Eye: ImageVector by lazy {
+        icon("eye", strokeWidth = 1.7f) {
+            moveTo(2.5f, 12f); curveTo(4.5f, 7.8f, 8f, 5.5f, 12f, 5.5f); curveTo(16f, 5.5f, 19.5f, 7.8f, 21.5f, 12f)
+            curveTo(19.5f, 16.2f, 16f, 18.5f, 12f, 18.5f); curveTo(8f, 18.5f, 4.5f, 16.2f, 2.5f, 12f); close()
+            moveTo(12f, 9f); arcTo(3f, 3f, 0f, true, true, 11.99f, 9f); close()
+        }
+    }
+
+    /** archivebox — message history. */
+    val Archive: ImageVector by lazy {
+        icon("archivebox", strokeWidth = 1.7f) {
+            moveTo(3f, 4.5f); lineTo(21f, 4.5f); lineTo(21f, 8.5f); lineTo(3f, 8.5f); close()
+            moveTo(4.5f, 8.5f); lineTo(4.5f, 19.5f); lineTo(19.5f, 19.5f); lineTo(19.5f, 8.5f)
+            moveTo(9.5f, 12f); lineTo(14.5f, 12f)
+        }
+    }
+
+    /** envelope.badge — mark unread / read. */
+    val Envelope: ImageVector by lazy {
+        icon("envelope", strokeWidth = 1.7f) {
+            moveTo(4f, 5.5f); lineTo(20f, 5.5f); arcTo(1.5f, 1.5f, 0f, false, true, 21.5f, 7f); lineTo(21.5f, 17f); arcTo(1.5f, 1.5f, 0f, false, true, 20f, 18.5f)
+            lineTo(4f, 18.5f); arcTo(1.5f, 1.5f, 0f, false, true, 2.5f, 17f); lineTo(2.5f, 7f); arcTo(1.5f, 1.5f, 0f, false, true, 4f, 5.5f); close()
+            moveTo(3f, 6.5f); lineTo(12f, 13f); lineTo(21f, 6.5f)
+        }
+    }
+
+    /** person.crop.circle.badge.questionmark — unknown senders. */
+    val PersonQuestion: ImageVector by lazy {
+        icon("person.crop.circle.badge.questionmark", strokeWidth = 1.7f) {
+            moveTo(12f, 3f); arcTo(9f, 9f, 0f, true, true, 11.99f, 3f); close()
+            moveTo(9.5f, 9.5f); curveTo(9.5f, 8f, 10.6f, 7f, 12f, 7f); curveTo(13.4f, 7f, 14.5f, 8f, 14.5f, 9.3f); curveTo(14.5f, 11.2f, 12f, 11.3f, 12f, 13.3f)
+            moveTo(12f, 16.6f); lineTo(12f, 16.7f)
+        }
+    }
+
+    /** speaker.wave.2 — sounds. */
+    val Speaker: ImageVector by lazy {
+        icon("speaker.wave.2", strokeWidth = 1.7f) {
+            moveTo(4f, 9.5f); lineTo(7.5f, 9.5f); lineTo(12f, 5.5f); lineTo(12f, 18.5f); lineTo(7.5f, 14.5f); lineTo(4f, 14.5f); close()
+            moveTo(15f, 9f); curveTo(16.2f, 10.5f, 16.2f, 13.5f, 15f, 15f)
+            moveTo(17.8f, 6.5f); curveTo(20.4f, 9.5f, 20.4f, 14.5f, 17.8f, 17.5f)
+        }
+    }
+
+    /** hand.tap — haptics. */
+    val Haptics: ImageVector by lazy {
+        icon("iphone.radiowaves", strokeWidth = 1.7f) {
+            moveTo(9f, 3.5f); lineTo(15f, 3.5f); arcTo(1.5f, 1.5f, 0f, false, true, 16.5f, 5f); lineTo(16.5f, 19f); arcTo(1.5f, 1.5f, 0f, false, true, 15f, 20.5f)
+            lineTo(9f, 20.5f); arcTo(1.5f, 1.5f, 0f, false, true, 7.5f, 19f); lineTo(7.5f, 5f); arcTo(1.5f, 1.5f, 0f, false, true, 9f, 3.5f); close()
+            moveTo(4.5f, 8.5f); curveTo(3.5f, 10.5f, 3.5f, 13.5f, 4.5f, 15.5f)
+            moveTo(19.5f, 8.5f); curveTo(20.5f, 10.5f, 20.5f, 13.5f, 19.5f, 15.5f)
+        }
+    }
 }
