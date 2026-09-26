@@ -106,6 +106,9 @@ interface SmsRepository {
     /** Moves a single message to Recently Deleted. */
     suspend fun deleteMessage(messageId: Long)
 
+    /** Returns (creating if needed) the group thread for several recipients. */
+    suspend fun getOrCreateGroupThreadId(addresses: List<String>): Long = -1L
+
     /** Returns (creating if needed) the thread id for a recipient address. */
     suspend fun getOrCreateThreadId(address: String): Long
 

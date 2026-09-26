@@ -10,6 +10,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.liquidglass.messages.data.local.MessageMeta
 import com.liquidglass.messages.data.model.Contact
@@ -194,5 +196,30 @@ class DesignShots {
         trash.trashThread(com.liquidglass.messages.data.local.TrashStore.TrashedThread(12, now, now - 20 * day, "+15551234567", null, "Your code is 482913", 3))
         trash.trashMessage(com.liquidglass.messages.data.local.TrashStore.TrashedMessage(99, 13, now - day, "+989351234567", "Oops, wrong chat"))
         shot("recently_deleted") { com.liquidglass.messages.ui.deleted.RecentlyDeletedScreen(onBack = {}) }
+    }
+
+    @Test fun inboxScrolled() = shot("inbox_scrolled", before = {
+        compose.onRoot().performTouchInput { swipeUp(startY = centerY + 300f, endY = centerY - 500f) }
+    }) {
+        ConversationListContent(
+            state = ConversationListUiState(
+                conversations = conversations + conversations.map { it.copy(threadId = it.threadId + 100) },
+                isLoading = false,
+            ),
+            onSearchChange = {},
+            onConversationClick = { _, _ -> },
+            onNewMessage = {},
+            onDeleteThread = {},
+        )
+    }
+
+    @Test fun newGroup() {
+        val repo = androidx.test.core.app.ApplicationProvider.getApplicationContext<MessagesApplication>().container.smsRepository
+        val vm = com.liquidglass.messages.ui.newmessage.NewMessageViewModel(repo)
+        vm.onPickContact(Contact("+989121112233", "Sara Ahmadi"))
+        vm.onPickContact(Contact("+989351234567", "Ali Rezaei"))
+        vm.onPickContact(Contact("+15551234567", "Olivia Rico"))
+        vm.onInputChange("Dinner Friday? 🍕")
+        shot("new_group") { com.liquidglass.messages.ui.newmessage.NewMessageSheet(onDismiss = {}, onMessageSent = { _, _ -> }, viewModel = vm) }
     }
 }

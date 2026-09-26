@@ -117,6 +117,9 @@ fun ChatScreen(
     onBack: () -> Unit,
     onOpenInfo: (Long, String) -> Unit = { _, _ -> },
     initialText: String? = null,
+    /** Message to scroll to and highlight (from Contact Info). */
+    jumpToMessageId: Long? = null,
+    onJumpHandled: () -> Unit = {},
     viewModel: ChatViewModel = viewModel(factory = ChatViewModel.factory(threadId, address)),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -163,6 +166,8 @@ fun ChatScreen(
         onRemoveAttachment = viewModel::removeAttachment,
         replyTo = replyTo,
         onReplyTo = viewModel::setReplyTo,
+        jumpToMessageId = jumpToMessageId,
+        onJumpHandled = onJumpHandled,
     )
 }
 
@@ -214,6 +219,8 @@ fun ChatContent(
     onRemoveAttachment: (android.net.Uri) -> Unit = {},
     replyTo: Message? = null,
     onReplyTo: (Message?) -> Unit = {},
+    jumpToMessageId: Long? = null,
+    onJumpHandled: () -> Unit = {},
 ) {
     val colors = LiquidTheme.colors
     val context = LocalContext.current
@@ -299,6 +306,24 @@ fun ChatContent(
     val reversedRows = remember(rows) { rows.asReversed() }
 
     val listState = rememberLazyListState()
+    // Jump from Contact Info (First Message / a search result): scroll there
+    // and pulse the bubble. Waits until the thread has loaded the message.
+    LaunchedEffect(jumpToMessageId, reversedRows) {
+        val target = jumpToMessageId ?: return@LaunchedEffect
+        val idx = reversedRows.indexOfFirst { it is ChatRow.Bubble && it.message.id == target }
+        if (idx < 0) return@LaunchedEffect
+        // Let the push-back animation settle, then jump. The request is cleared
+        // only AFTER the jump: clearing it first changed this effect's key and
+        // cancelled the scroll before it ran.
+        kotlinx.coroutines.delay(300)
+        listState.scrollToItem(idx + state.scheduled.size)
+        highlightId = target
+        jumpScope.launch {
+            kotlinx.coroutines.delay(1600)
+            if (highlightId == target) highlightId = null
+        }
+        onJumpHandled()
+    }
     LaunchedEffect(messages.size) {
         if (reversedRows.isNotEmpty() && listState.firstVisibleItemIndex <= 3) {
             listState.animateScrollToItem(0)

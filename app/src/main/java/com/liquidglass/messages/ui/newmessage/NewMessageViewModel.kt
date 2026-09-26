@@ -35,11 +35,24 @@ data class NewMessageUiState(
     val recipient: String = "",
     val results: List<Contact> = emptyList(),
     val inputText: String = "",
-    /** The contact chosen from suggestions/picker; its NUMBER is what gets texted. */
-    val picked: Contact? = null,
+    /** Recipient tokens already added (contacts or typed numbers). */
+    val picked: List<Contact> = emptyList(),
 ) {
-    /** The address a send goes to: the picked contact's number, else what was typed. */
-    val address: String get() = picked?.number ?: recipient.trim()
+    /** Everyone a send goes to: the tokens plus a number still being typed. */
+    val addresses: List<String>
+        get() = (picked.map { it.number } + listOfNotNull(recipient.trim().takeIf { it.looksLikeNumber() }))
+            .distinctBy { it.filter(Char::isDigit).takeLast(10) }
+
+    /** Kept for the single-recipient callers. */
+    val address: String get() = addresses.firstOrNull() ?: recipient.trim()
+
+    val isGroup: Boolean get() = addresses.size > 1
+}
+
+/** A typed recipient that can be texted: mostly digits, optionally with + ( ) - and spaces. */
+internal fun String.looksLikeNumber(): Boolean {
+    val t = trim()
+    return t.count(Char::isDigit) >= 3 && t.all { it.isDigit() || it in "+()- " }
 }
 
 /**
@@ -85,18 +98,36 @@ class NewMessageViewModel(
 
     /** Updates the recipient text and re-triggers debounced contact search. */
     fun onRecipientChange(q: String) {
-        // Editing the field un-picks the contact (the text no longer names them).
-        _uiState.update { it.copy(recipient = q, picked = null) }
+        // A comma or semicolon after a number turns it into a token, like iOS.
+        if ((q.endsWith(",") || q.endsWith(";")) && q.dropLast(1).looksLikeNumber()) {
+            commitTyped(q.dropLast(1))
+            return
+        }
+        _uiState.update { it.copy(recipient = q) }
         _recipientQuery.value = q
     }
 
-    /** Selects a contact from the results, filling the recipient and clearing the list. */
+    /** Turns a typed number into a recipient token (Return key, comma). */
+    fun commitTyped(text: String = _uiState.value.recipient) {
+        val t = text.trim()
+        if (!t.looksLikeNumber()) return
+        onPickContact(Contact(number = t))
+    }
+
+    /** Adds a contact from the results / picker as a recipient token. */
     fun onPickContact(contact: Contact) {
-        _uiState.update {
-            it.copy(recipient = contact.displayName, results = emptyList(), picked = contact)
+        _uiState.update { s ->
+            val key = contact.number.filter(Char::isDigit).takeLast(10)
+            val already = s.picked.any { it.number.filter(Char::isDigit).takeLast(10) == key }
+            s.copy(recipient = "", results = emptyList(), picked = if (already) s.picked else s.picked + contact)
         }
         // Keep the search dormant so picking a contact doesn't re-open results.
         _recipientQuery.value = ""
+    }
+
+    /** Removes a recipient token (tapping it, or backspace on an empty field). */
+    fun removeRecipient(contact: Contact) {
+        _uiState.update { it.copy(picked = it.picked - contact) }
     }
 
     /** Updates the composed message body. */
@@ -110,15 +141,23 @@ class NewMessageViewModel(
      * caller can navigate into the live chat. No-op if recipient/body is blank.
      */
     fun send(onSent: (threadId: Long, address: String) -> Unit) {
-        // Previously this sent to the *display name* after picking a contact.
-        val address = _uiState.value.address
+        val addresses = _uiState.value.addresses
         val body = _uiState.value.inputText.trim()
-        if (address.isBlank() || body.isBlank()) return
+        if (addresses.isEmpty() || body.isBlank()) return
         viewModelScope.launch {
-            val threadId = repository.getOrCreateThreadId(address)
-            repository.sendMessage(address, body, -1)
-            _uiState.value = NewMessageUiState()
-            onSent(threadId, address)
+            if (addresses.size > 1) {
+                // A group: one MMS thread shared by everyone, like iOS group texts.
+                val threadId = repository.getOrCreateGroupThreadId(addresses)
+                repository.sendMms(addresses, body, emptyList())
+                _uiState.value = NewMessageUiState()
+                onSent(threadId, addresses.first())
+            } else {
+                val address = addresses.first()
+                val threadId = repository.getOrCreateThreadId(address)
+                repository.sendMessage(address, body, -1)
+                _uiState.value = NewMessageUiState()
+                onSent(threadId, address)
+            }
         }
     }
 

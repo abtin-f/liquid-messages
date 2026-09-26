@@ -277,7 +277,13 @@ fun ConversationListContent(
     BackHandler(enabled = menuOpen) { menu = null }
     BackHandler(enabled = contextTarget != null) { contextTarget = null }
 
-    val scrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 24 } }
+    // Header items: 0 = large title, 1 = search field (while not searching).
+    // Title gone → small title in the bar; search field gone → it docks at the bottom.
+    val titleGone by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 70 } }
+    val searchDocked by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 1 || (listState.firstVisibleItemIndex == 1 && listState.firstVisibleItemScrollOffset > 40) }
+    }
+    val scrolled = titleGone
 
     // ---- Data: pins on top, the rest filtered ----
     val showPins = !searching && filter == InboxFilter.ALL
@@ -315,13 +321,19 @@ fun ConversationListContent(
                     bottom = navBottom + BottomBarHeight + 28.dp,
                 ),
             ) {
-                if (filter != InboxFilter.ALL && !searching) {
-                    item(key = "filterTitle") {
+                if (!searching) {
+                    item(key = "largeTitle") {
                         Text(
                             filter.title,
                             style = IosType.largeTitle,
                             color = colors.primaryText,
                             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp),
+                        )
+                    }
+                    item(key = "topSearch") {
+                        TopSearchField(
+                            onClick = { searching = true },
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
                         )
                     }
                 }
@@ -379,7 +391,6 @@ fun ConversationListContent(
             ) {
                 EdgeFade(top = true, height = statusTop + ToolbarHeight + 12.dp)
             }
-            EdgeFade(top = false, height = navBottom + BottomBarHeight + 36.dp, modifier = Modifier.align(Alignment.BottomCenter))
 
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 // ---- Top toolbar: Edit · (title when scrolled) · Filter ----
@@ -410,13 +421,34 @@ fun ConversationListContent(
                         ) {
                             Text(filter.title, style = IosType.headline, color = colors.primaryText)
                         }
-                        GlassCircleButton(
-                            icon = IosIcons.Filter,
-                            contentDescription = "Filter",
-                            onClick = { menu = ToolbarMenu.FILTER },
-                            tint = if (filter == InboxFilter.ALL) colors.primaryText else colors.accent,
+                        Row(
                             modifier = Modifier.align(Alignment.CenterEnd),
-                        )
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            GlassCircleButton(
+                                icon = IosIcons.Filter,
+                                contentDescription = "Filter",
+                                onClick = { menu = ToolbarMenu.FILTER },
+                                tint = if (filter == InboxFilter.ALL) colors.primaryText else colors.accent,
+                            )
+                            // At the top of the list compose sits beside Filter; once the
+                            // search docks at the bottom, compose moves down next to it.
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = !searchDocked,
+                                enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.6f),
+                                exit = fadeOut(tween(140)) + scaleOut(targetScale = 0.6f),
+                            ) {
+                                Row {
+                                    Spacer(Modifier.width(10.dp))
+                                    GlassCircleButton(
+                                        icon = IosIcons.Compose,
+                                        contentDescription = "New message",
+                                        onClick = onNewMessage,
+                                        tint = colors.accent,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -424,6 +456,7 @@ fun ConversationListContent(
                 BottomSearchBar(
                     query = state.searchQuery,
                     searching = searching,
+                    showField = searchDocked || searching,
                     onQueryChange = onSearchChange,
                     onFocus = { searching = true },
                     onClose = ::endSearch,
@@ -457,6 +490,7 @@ fun ConversationListContent(
                         .padding(start = 16.dp, end = 16.dp, top = ToolbarHeight),
                 ) {
                     val entries = if (showEdit) listOf(
+                        MenuEntry("New Group", IosIcons.PersonCircle) { onNewMessage() },
                         MenuEntry("Mark All as Read", IosIcons.Envelope) { onMarkAllRead() },
                         MenuEntry("Settings", IosIcons.Gear) { onOpenSettings() },
                     ) else buildList {
@@ -739,6 +773,8 @@ private fun BottomSearchBar(
     onClose: () -> Unit,
     onCompose: () -> Unit,
     modifier: Modifier = Modifier,
+    /** The capsule itself; hidden while the search field still sits at the top. */
+    showField: Boolean = true,
 ) {
     val colors = LiquidTheme.colors
     val keyboard = LocalSoftwareKeyboardController.current
@@ -755,9 +791,18 @@ private fun BottomSearchBar(
         }
     }
 
+    // Tapping the top field starts searching here, above the keyboard.
+    LaunchedEffect(searching) { if (searching) runCatching { focus.requestFocus() } }
+
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showField,
+            enter = fadeIn(tween(180)) + expandHorizontally(spring(dampingRatio = 0.85f, stiffness = 420f), expandFrom = Alignment.End),
+            exit = fadeOut(tween(140)) + shrinkHorizontally(tween(200), shrinkTowards = Alignment.End),
+        ) {
         GlassCapsule(
-            modifier = Modifier.weight(1f).height(BottomBarHeight),
+            modifier = Modifier.fillMaxWidth().height(BottomBarHeight),
             onClick = { runCatching { focus.requestFocus() } },
         ) {
             Row(
@@ -824,14 +869,45 @@ private fun BottomSearchBar(
                 }
             }
         }
-        Spacer(Modifier.width(10.dp))
-        GlassCircleButton(
-            icon = if (searching) IosIcons.Close else IosIcons.Compose,
-            contentDescription = if (searching) "Close search" else "New message",
-            onClick = if (searching) onClose else onCompose,
-            tint = if (searching) colors.primaryText else colors.accent,
-            size = BottomBarHeight,
-            iconSize = if (searching) 18.dp else 23.dp,
-        )
+        }
+        }
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showField,
+            enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.6f),
+            exit = fadeOut(tween(140)) + scaleOut(targetScale = 0.6f),
+        ) {
+            Row {
+                Spacer(Modifier.width(10.dp))
+                GlassCircleButton(
+                    icon = if (searching) IosIcons.Close else IosIcons.Compose,
+                    contentDescription = if (searching) "Close search" else "New message",
+                    onClick = if (searching) onClose else onCompose,
+                    tint = if (searching) colors.primaryText else colors.accent,
+                    size = BottomBarHeight,
+                    iconSize = if (searching) 18.dp else 23.dp,
+                )
+            }
+        }
+    }
+}
+
+/** The search field under the large title (a button: searching happens in the docked bar). */
+@Composable
+private fun TopSearchField(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = LiquidTheme.colors
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(38.dp)
+            .clip(RoundedCornerShape(19.dp))
+            .background(colors.fieldBackground)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(IosIcons.Search, contentDescription = null, tint = colors.secondaryText, modifier = Modifier.size(17.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("Search", style = IosType.body, color = colors.secondaryText, modifier = Modifier.weight(1f))
+        Icon(IosIcons.Mic, contentDescription = null, tint = colors.secondaryText, modifier = Modifier.size(17.dp))
     }
 }

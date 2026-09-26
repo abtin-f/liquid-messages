@@ -263,7 +263,15 @@ class ChatViewModel(
             if (files.isNotEmpty() || group) {
                 // Photos/files and group conversations go out as one MMS.
                 val to = _uiState.value.recipients.ifEmpty { listOf(address) }
-                repository.sendMms(to, wire, files, _uiState.value.subscriptionId)
+                val result = runCatching { repository.sendMms(to, wire, files, _uiState.value.subscriptionId) }
+                    .getOrElse { Result.failure(it) }
+                if (result.isFailure) {
+                    com.liquidglass.messages.data.mms.MmsLog.log("SEND failed in app: ${result.exceptionOrNull()?.message}")
+                    com.liquidglass.messages.ui.components.IosDialogs.alert(
+                        "Message Not Sent",
+                        "This MMS couldn't be prepared. Check that mobile data is on, then try again. Details are in Settings › MMS Diagnostics.",
+                    )
+                }
             } else {
                 repository.sendMessage(address, wire, _uiState.value.subscriptionId)
             }

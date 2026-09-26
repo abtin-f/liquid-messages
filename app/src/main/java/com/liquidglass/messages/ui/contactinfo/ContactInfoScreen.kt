@@ -129,6 +129,8 @@ fun ContactInfoScreen(
     address: String,
     onBack: () -> Unit,
     onConversationDeleted: () -> Unit = onBack,
+    /** Opens the chat scrolled to this message. */
+    onOpenMessage: (Long) -> Unit = {},
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -283,6 +285,7 @@ fun ContactInfoScreen(
                                         )
                                     },
                                     onDelete = { confirm = ConfirmAction.DELETE },
+                                    onOpenMessage = onOpenMessage,
                                 )
                                 DetailTab.BACKGROUNDS -> BackgroundsTab(
                                     photo = photoBg,
@@ -333,7 +336,7 @@ fun ContactInfoScreen(
                 exit = slideOutHorizontally(push) { it },
             ) {
                 CompositionLocalProvider(LocalLiquidColors provides base) {
-                    SearchPage(messages, title, onBack = { searchOpen = false })
+                    SearchPage(messages, title, onBack = { searchOpen = false }, onOpen = onOpenMessage)
                 }
             }
             viewing?.let { ImageViewer(it, onClose = { viewing = null }) }
@@ -452,6 +455,7 @@ private fun InfoTab(
     onBlock: () -> Unit,
     onReportJunk: () -> Unit,
     onDelete: () -> Unit,
+    onOpenMessage: (Long) -> Unit,
 ) {
     val colors = LiquidTheme.colors
     val context = LocalContext.current
@@ -503,7 +507,9 @@ private fun InfoTab(
             IosRow(
                 title = "First Message",
                 value = DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(messages.first().timestamp)),
+                chevron = true,
                 showDivider = false,
+                onClick = { onOpenMessage(messages.first().id) },
             )
         }
     }

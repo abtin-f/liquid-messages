@@ -38,7 +38,7 @@
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/contact_info.png" width="230"><br><sub>اطلاعات مخاطب</sub></td>
-    <td align="center"><img src="docs/screenshots/new_message.png" width="230"><br><sub>پیام جدید</sub></td>
+    <td align="center"><img src="docs/screenshots/new_group.png" width="230"><br><sub>پیام جدید</sub></td>
     <td align="center"><img src="docs/screenshots/reply.png" width="230"><br><sub>ریپلای</sub></td>
   </tr>
   <tr>

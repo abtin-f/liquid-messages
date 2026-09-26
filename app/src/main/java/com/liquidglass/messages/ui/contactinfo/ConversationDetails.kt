@@ -271,7 +271,7 @@ fun LocationsPage(locations: List<Pair<SharedLocation, Long>>, onBack: () -> Uni
 
 /** iOS "Search in Conversation": a search field and matching messages with the match highlighted. */
 @Composable
-fun SearchPage(messages: List<Message>, contactName: String, onBack: () -> Unit) {
+fun SearchPage(messages: List<Message>, contactName: String, onBack: () -> Unit, onOpen: (Long) -> Unit = {}) {
     val colors = LiquidTheme.colors
     var query by remember { mutableStateOf("") }
     val q = query.trim()
@@ -316,7 +316,7 @@ fun SearchPage(messages: List<Message>, contactName: String, onBack: () -> Unit)
             else -> iosSection("results", header = "${results.size} Messages") {
                 results.take(200).forEachIndexed { i, m ->
                     val text = MessageText.visible(m.body)
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp)) {
+                    Column(Modifier.fillMaxWidth().clickable { onOpen(m.id) }.padding(horizontal = 20.dp, vertical = 10.dp)) {
                         Row {
                             Text(
                                 if (m.isOutgoing) "You" else contactName,

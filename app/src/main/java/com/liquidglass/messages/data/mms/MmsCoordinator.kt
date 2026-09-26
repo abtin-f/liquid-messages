@@ -42,7 +42,9 @@ class MmsCoordinator(
 
     /** Handles the WAP-push PDU delivered to the default SMS app. */
     fun onWapPush(pdu: ByteArray, subscriptionId: Int) {
+        MmsLog.log("RECV wap-push ${pdu.size}B sub=$subscriptionId ${MmsLog.networkState(appContext)}")
         val n = MmsPdu.parseNotification(pdu) ?: run {
+            MmsLog.log("RECV not an MMS notification")
             Log.w(TAG, "WAP push is not an MMS notification (${pdu.size} bytes)")
             return
         }
@@ -51,6 +53,7 @@ class MmsCoordinator(
             transport.acknowledge(n.transactionId, subscriptionId)
             return
         }
+        MmsLog.log("RECV notification size=${n.messageSize} -> download")
         transport.download(n, subscriptionId)
     }
 
@@ -62,7 +65,11 @@ class MmsCoordinator(
     ) {
         if (store.alreadyStored(retrieved.transactionId, contentLocation)) return
         val recipients = participantsOf(retrieved)
-        val uri = store.persistIncoming(retrieved, recipients, subscriptionId, contentLocation) ?: return
+        val uri = store.persistIncoming(retrieved, recipients, subscriptionId, contentLocation) ?: run {
+            MmsLog.log("RECV could not store downloaded MMS")
+            return
+        }
+        MmsLog.log("RECV stored $uri parts=${retrieved.parts.size} participants=${recipients.size}")
 
         val from = retrieved.from ?: recipients.firstOrNull().orEmpty()
         val text = retrieved.parts.firstOrNull { it.contentType.startsWith("text/plain") }?.text()
@@ -124,7 +131,11 @@ class MmsCoordinator(
      * Returns false when nothing could be prepared or handed to the platform.
      */
     fun send(recipients: List<String>, text: String, attachments: List<Uri>, subscriptionId: Int): Boolean {
-        if (recipients.isEmpty()) return false
+        MmsLog.log("SEND start to=${recipients.size} text=${text.length}ch attachments=${attachments.map { it.scheme + ":" + it.lastPathSegment?.substringAfterLast('.') }}")
+        if (recipients.isEmpty()) {
+            MmsLog.log("SEND aborted: no recipients")
+            return false
+        }
         val budget = (transport.maxMessageSize(subscriptionId) * 0.9).toInt()
         val parts = ArrayList<MmsPdu.Part>()
         if (text.isNotBlank()) {
@@ -135,14 +146,26 @@ class MmsCoordinator(
         // iOS "Low Quality Image Mode": much smaller photos.
         val low = runCatching { appContext.appContainer.appSettings.lowQualityImages.value }.getOrDefault(false)
         val imageBudget = if (low) minOf(perAttachment, 120_000) else perAttachment
-        attachments.forEach { uri -> readAttachment(uri, imageBudget)?.let(parts::add) }
-        if (parts.isEmpty()) return false
+        attachments.forEach { uri ->
+            val part = readAttachment(uri, imageBudget)
+            MmsLog.log("SEND attachment ${uri.lastPathSegment?.substringAfterLast('.')} -> ${part?.let { "${it.contentType} ${it.data.size}B" } ?: "FAILED to read"} (budget $imageBudget)")
+            part?.let(parts::add)
+        }
+        if (parts.isEmpty()) {
+            MmsLog.log("SEND aborted: nothing to send")
+            return false
+        }
 
         val threadId = runCatching { Telephony.Threads.getOrCreateThreadId(appContext, recipients.toSet()) }.getOrDefault(-1L)
         val tx = MmsTransport.newTransactionId()
         val row = store.persistOutgoing(threadId, recipients, parts, subscriptionId, tx)
         val pdu = MmsPdu.encodeSendReq(recipients, parts, tx)
+        MmsLog.log(
+            "SEND to=${recipients.size} parts=${parts.map { "${it.contentType}:${it.data.size}" }} pdu=${pdu.size}B " +
+                "limit=${transport.maxMessageSize(subscriptionId)} thread=$threadId row=$row sub=$subscriptionId ${MmsLog.networkState(appContext)}",
+        )
         val handed = transport.send(pdu, row, subscriptionId)
+        MmsLog.log("SEND handed to platform: $handed")
         if (!handed && row != null) store.setBox(row, Telephony.Mms.MESSAGE_BOX_FAILED)
         return handed
     }
@@ -176,7 +199,10 @@ class MmsCoordinator(
             }
             MmsPdu.Part(type, bytes, name = name)
         }
-    }.onFailure { Log.e(TAG, "Couldn't read attachment $uri", it) }.getOrNull()
+    }.onFailure {
+        MmsLog.log("SEND read attachment threw ${it.javaClass.simpleName}: ${it.message}")
+        Log.e(TAG, "Couldn't read attachment $uri", it)
+    }.getOrNull()
 
     /** Downscales + re-compresses until the JPEG fits [maxBytes]. */
     private fun compressImage(uri: Uri, maxBytes: Int): ByteArray? {

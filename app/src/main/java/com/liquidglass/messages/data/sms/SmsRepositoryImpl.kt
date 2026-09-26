@@ -866,6 +866,11 @@ class SmsRepositoryImpl(
         }
     }
 
+    override suspend fun getOrCreateGroupThreadId(addresses: List<String>): Long =
+        withContext(ioDispatcher) {
+            runCatching { Telephony.Threads.getOrCreateThreadId(appContext, addresses.toSet()) }.getOrDefault(-1L)
+        }
+
     override suspend fun getOrCreateThreadId(address: String): Long =
         withContext(ioDispatcher) {
             try {

@@ -5,6 +5,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
@@ -17,6 +19,9 @@ import com.liquidglass.messages.ui.chat.ChatScreen
 import com.liquidglass.messages.ui.contactinfo.ContactInfoScreen
 import com.liquidglass.messages.ui.conversations.ConversationListScreen
 import com.liquidglass.messages.ui.settings.SettingsScreen
+
+/** SavedState key: message the chat should jump to when shown again. */
+private const val JUMP_TO = "jumpToMessage"
 
 /** Sentinel thread id for a chat opened before its Telephony thread exists. */
 private const val NO_THREAD_ID: Long = -1L
@@ -92,9 +97,12 @@ fun MessagesNavGraph(
             val threadId = args?.getLong(Routes.argThreadId) ?: NO_THREAD_ID
             val address = Routes.decodeAddress(args?.getString(Routes.argAddress))
 
+            val jump by backStackEntry.savedStateHandle.getStateFlow<Long?>(JUMP_TO, null).collectAsState()
             ChatScreen(
                 threadId = threadId,
                 address = address,
+                jumpToMessageId = jump,
+                onJumpHandled = { backStackEntry.savedStateHandle[JUMP_TO] = null },
                 // Only the deep-linked chat gets the shared body.
                 initialText = startWithBody.takeIf { address == startWithRecipient },
                 onBack = { navController.popBackStack() },
@@ -124,6 +132,10 @@ fun MessagesNavGraph(
                 threadId = threadId,
                 address = address,
                 onBack = { navController.popBackStack() },
+                onOpenMessage = { id ->
+                    navController.previousBackStackEntry?.savedStateHandle?.set(JUMP_TO, id)
+                    navController.popBackStack()
+                },
                 // The chat underneath no longer exists — go straight back to the list.
                 onConversationDeleted = { navController.popBackStack(Routes.conversations, inclusive = false) },
             )

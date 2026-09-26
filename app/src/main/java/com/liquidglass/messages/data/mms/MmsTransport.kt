@@ -48,6 +48,7 @@ class MmsTransport(context: Context) {
         try {
             smsManager(subscriptionId).downloadMultimediaMessage(appContext, notification.contentLocation, uri, null, pi)
         } catch (e: Exception) {
+            MmsLog.log("RECV downloadMultimediaMessage threw ${e.javaClass.simpleName}: ${e.message}")
             Log.e(TAG, "downloadMultimediaMessage failed", e)
             file.delete()
         }
@@ -70,6 +71,7 @@ class MmsTransport(context: Context) {
             smsManager(subscriptionId).sendMultimediaMessage(appContext, uri, null, null, pi)
             true
         } catch (e: Exception) {
+            MmsLog.log("SEND sendMultimediaMessage threw ${e.javaClass.simpleName}: ${e.message}")
             Log.e(TAG, "sendMultimediaMessage failed", e)
             file.delete()
             false
@@ -163,6 +165,10 @@ class MmsDownloadedReceiver : BroadcastReceiver() {
         val path = intent.getStringExtra(MmsTransport.EXTRA_FILE) ?: return
         val code = resultCode
         val ok = code == Activity.RESULT_OK
+        MmsLog.log(
+            "RECV download result=${MmsLog.resultName(code)} http=${intent.getIntExtra(SmsManager.EXTRA_MMS_HTTP_STATUS, 0)} " +
+                MmsLog.networkState(context),
+        )
         val pending = goAsync()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope.launch {
@@ -203,6 +209,10 @@ class MmsSentReceiver : BroadcastReceiver() {
         val row = intent.getStringExtra(MmsTransport.EXTRA_ROW)?.let(Uri::parse) ?: return
         val conf = intent.getByteArrayExtra(SmsManager.EXTRA_MMS_DATA)?.let(MmsPdu::parseSendConf)
         val ok = resultCode == Activity.RESULT_OK && (conf == null || conf.responseStatus == MmsPdu.RESPONSE_OK)
+        MmsLog.log(
+            "SEND result=${MmsLog.resultName(resultCode)} http=${intent.getIntExtra(SmsManager.EXTRA_MMS_HTTP_STATUS, 0)} " +
+                "mmscStatus=${conf?.responseStatus} row=$row ${MmsLog.networkState(context)}",
+        )
         val box = if (ok) Telephony.Mms.MESSAGE_BOX_SENT else Telephony.Mms.MESSAGE_BOX_FAILED
         if (!ok) Log.w("MmsSent", "MMS send failed: result=$resultCode status=${conf?.responseStatus}")
         val pending = goAsync()
@@ -210,6 +220,11 @@ class MmsSentReceiver : BroadcastReceiver() {
         scope.launch {
             try {
                 context.appContainer.mmsStore.setBox(row, box, conf?.messageId)
+                // Diagnostics: some OEM services remove rows they didn't write.
+                val exists = runCatching {
+                    context.contentResolver.query(row, arrayOf(Telephony.Mms._ID), null, null, null)?.use { it.count > 0 }
+                }.getOrNull()
+                MmsLog.log("SEND row after result: exists=$exists box=$box")
             } finally {
                 pending.finish()
                 scope.cancel()

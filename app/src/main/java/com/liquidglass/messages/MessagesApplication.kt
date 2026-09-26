@@ -17,6 +17,7 @@ class MessagesApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.liquidglass.messages.data.mms.MmsLog.init(this)
         container = ServiceLocator(this)
         container.notificationHelper.createChannels()
         // Alarms can be lost (force-stop, some OEM task killers); re-arm Send Later.

@@ -1,6 +1,18 @@
 package com.liquidglass.messages.ui.newmessage
 
 import android.app.Activity
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.input.ImeAction
 import android.provider.ContactsContract
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -60,6 +72,7 @@ import com.liquidglass.messages.ui.theme.LiquidTheme
  * blue ⊕ contact picker, live suggestions, and the composer pinned above the
  * keyboard. Presentation (slide-up, background scale) is done by the host.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NewMessageSheet(
     onDismiss: () -> Unit,
@@ -115,7 +128,12 @@ fun NewMessageSheet(
                 .background(colors.tertiaryText),
         )
         Box(Modifier.fillMaxWidth().height(50.dp).padding(horizontal = 16.dp)) {
-            Text("New Message", style = IosType.headline, color = colors.primaryText, modifier = Modifier.align(Alignment.Center))
+            Text(
+                if (state.isGroup) "New Group" else "New Message",
+                style = IosType.headline,
+                color = colors.primaryText,
+                modifier = Modifier.align(Alignment.Center),
+            )
             Text(
                 "Cancel",
                 style = IosType.body,
@@ -128,41 +146,67 @@ fun NewMessageSheet(
             )
         }
 
-        // To: row.
+        // To: row — recipient tokens flow onto new lines, then the text field.
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp).height(46.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp).heightIn(min = 46.dp).padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("To:", style = IosType.body, color = colors.secondaryText)
             Spacer(Modifier.width(6.dp))
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                if (state.picked != null) {
-                    // A picked contact shows as an iOS recipient token.
+            FlowRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                state.picked.forEach { c ->
+                    // iOS recipient token; tap removes it.
                     Text(
-                        state.picked!!.displayName,
+                        c.displayName,
                         style = IosType.body,
+                        fontFamily = com.liquidglass.messages.ui.theme.fontFamilyFor(c.displayName),
                         color = colors.accent,
                         modifier = Modifier
+                            .align(Alignment.CenterVertically)
                             .clip(CircleShape)
                             .background(colors.accent.copy(alpha = 0.12f))
-                            .clickable { viewModel.onRecipientChange("") }
+                            .clickable { viewModel.removeRecipient(c) }
                             .padding(horizontal = 10.dp, vertical = 3.dp),
                     )
-                } else {
-                    BasicTextField(
-                        value = state.recipient,
-                        onValueChange = viewModel::onRecipientChange,
-                        singleLine = true,
-                        textStyle = IosType.body.copy(
+                }
+                BasicTextField(
+                    value = state.recipient,
+                    onValueChange = viewModel::onRecipientChange,
+                    singleLine = true,
+                    textStyle = IosType.body.copy(
                         color = colors.primaryText,
                         textDirection = androidx.compose.ui.text.style.TextDirection.Content,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Start,
                     ),
-                        cursorBrush = SolidColor(colors.accent),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                        modifier = Modifier.fillMaxWidth().focusRequester(focus),
-                    )
-                }
+                    cursorBrush = SolidColor(colors.accent),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(onNext = { viewModel.commitTyped() }),
+                    modifier = Modifier
+                        .widthIn(min = 80.dp)
+                        .weight(1f)
+                        .align(Alignment.CenterVertically)
+                        .focusRequester(focus)
+                        .onPreviewKeyEvent { e ->
+                            // Backspace on an empty field removes the last token.
+                            if (e.type == KeyEventType.KeyDown && e.key == Key.Backspace && state.recipient.isEmpty() && state.picked.isNotEmpty()) {
+                                viewModel.removeRecipient(state.picked.last()); true
+                            } else false
+                        },
+                    decorationBox = { inner ->
+                        if (state.recipient.isEmpty()) {
+                            Text(
+                                if (state.picked.isEmpty()) "Name or number" else "Add more people",
+                                style = IosType.body,
+                                color = colors.tertiaryText,
+                            )
+                        }
+                        inner()
+                    },
+                )
             }
             Icon(
                 imageVector = IosIcons.PlusCircle,

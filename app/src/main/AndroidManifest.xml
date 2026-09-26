@@ -6,6 +6,7 @@
     <!-- Only what an SMS app actually uses. Every extra "dangerous" permission
          raises Play Protect's risk score for a sideloaded SMS app, so unused ones
          (WRITE_SMS, READ_PHONE_STATE, READ_PHONE_NUMBERS) are gone. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />

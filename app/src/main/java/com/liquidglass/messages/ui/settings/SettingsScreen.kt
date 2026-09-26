@@ -110,7 +110,7 @@ private val TileTeal = Color(0xFF30B0C7)
 private val TilePurple = Color(0xFFAF52DE)
 
 /** Pages of the Settings stack. */
-private enum class Page { ROOT, PERSONALIZE, KEEP, PREVIEWS }
+private enum class Page { ROOT, PERSONALIZE, KEEP, PREVIEWS, MMSLOG }
 
 /**
  * Settings, laid out like iOS 27 Settings › Apps › Messages, plus a
@@ -140,6 +140,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             Page.PERSONALIZE -> PersonalizePage(onBack = { page = Page.ROOT })
             Page.KEEP -> KeepMessagesPage(onBack = { page = Page.ROOT })
             Page.PREVIEWS -> PreviewsPage(onBack = { page = Page.ROOT })
+            Page.MMSLOG -> MmsLogPage(onBack = { page = Page.ROOT })
         }
     }
 }
@@ -280,9 +281,13 @@ private fun RootPage(onBack: () -> Unit, open: (Page) -> Unit) {
             IosRow(title = "Character Count", icon = IosIcons.TextCount, iconBackground = TileOrange) {
                 IosSwitch(characterCount, settings::setCharacterCount)
             }
-            IosRow(title = "Low Quality Image Mode", icon = IosIcons.Photos, iconBackground = TileTeal, showDivider = false) {
+            IosRow(title = "Low Quality Image Mode", icon = IosIcons.Photos, iconBackground = TileTeal) {
                 IosSwitch(lowQuality, settings::setLowQualityImages)
             }
+            IosRow(
+                title = "MMS Diagnostics", icon = IosIcons.Info, iconBackground = TileGray,
+                chevron = true, showDivider = false, onClick = { open(Page.MMSLOG) },
+            )
         }
 
         iosSection(
@@ -797,4 +802,41 @@ private fun openBlockedNumbers(context: Context) {
     val intent = runCatching { telecom?.createManageBlockedNumbersIntent() }.getOrNull()
     if (intent != null) launch(context, intent)
     else IosDialogs.alert("Blocked Contacts Unavailable", "This phone doesn't provide a blocked contacts list.")
+}
+
+/** The MMS journal (see MmsLog): what happened on each send / download. */
+@Composable
+private fun MmsLogPage(onBack: () -> Unit) {
+    val context = LocalContext.current
+    val colors = LiquidTheme.colors
+    var text by remember { mutableStateOf(com.liquidglass.messages.data.mms.MmsLog.read()) }
+    IosGroupedPage(title = "MMS Diagnostics", onBack = onBack, backLabel = "Messages") {
+        iosSection(
+            "state",
+            footer = "MMS travels over mobile data, so mobile data must be on even when Wi-Fi is connected. " +
+                "This log records sizes, result codes and network state only — never message text or numbers.",
+        ) {
+            IosRow(title = "Network", subtitle = com.liquidglass.messages.data.mms.MmsLog.networkState(context), showDivider = false)
+        }
+        iosSection("actions") {
+            IosRow(title = "Share Log", titleColor = colors.accent, onClick = {
+                launch(
+                    context,
+                    Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text.ifBlank { "(empty)" }), null),
+                )
+            })
+            IosRow(title = "Clear Log", titleColor = colors.destructive, showDivider = false, onClick = {
+                com.liquidglass.messages.data.mms.MmsLog.clear()
+                text = ""
+            })
+        }
+        iosSection("log", header = "Log") {
+            Text(
+                text.ifBlank { "No MMS activity yet." }.lines().takeLast(120).joinToString("\n"),
+                style = IosType.caption1.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
+                color = colors.secondaryText,
+                modifier = Modifier.padding(14.dp),
+            )
+        }
+    }
 }

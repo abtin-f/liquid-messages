@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.8.1
+
+- **Inbox:** the large title and search field sit at the top again. When you scroll down, search docks at the bottom next to compose (iOS 26), and it returns to the top when you scroll back up.
+- **New group:** add several people in New Message (contacts, the ⊕ picker, or typed numbers as tokens) to start a group conversation over MMS. Tap a token or press backspace to remove it.
+- **Inbox:** at the top, the compose (pencil) button sits beside Filter and moves to the bottom with search when you scroll. The bottom fade is gone, and the Edit menu has **New Group**.
+- **Contact Info:** "First Message" and search results open the chat scrolled to that message and highlight it. (Fixed a bug where clearing the jump request cancelled the scroll.)
+- **MMS diagnostics:** every send/download step is logged to Settings › MMS Diagnostics (sizes, result codes and network state only), and a failed MMS now shows an alert instead of failing silently.
+
 ## 1.8.0
 
 - **Recently Deleted (iOS):** deleted conversations and messages stay for 30 days. Open it from the filter menu to see days left, then Recover or Delete each item, or use Recover All / Delete All. Everything is purged automatically after 30 days, and recovery restores messages exactly, MMS photos and reactions included.
