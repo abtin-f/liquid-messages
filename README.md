@@ -43,6 +43,9 @@ Liquid Messages is a complete **default SMS/MMS app** for Android, designed to l
     <td align="center"><img src="docs/screenshots/alert.png" width="230"><br><sub>iOS alerts</sub></td>
     <td align="center"><img src="docs/screenshots/recently_deleted.png" width="230"><br><sub>Recently Deleted</sub></td>
   </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/message_times.png" width="230"><br><sub>Message times</sub></td>
+  </tr>
 </table>
 
 ## Features

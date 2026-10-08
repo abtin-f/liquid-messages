@@ -46,6 +46,9 @@
     <td align="center"><img src="docs/screenshots/alert.png" width="230"><br><sub>هشدارهای iOS</sub></td>
     <td align="center"><img src="docs/screenshots/recently_deleted.png" width="230"><br><sub>Recently Deleted</sub></td>
   </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/message_times.png" width="230"><br><sub>ساعت پیام‌ها</sub></td>
+  </tr>
 </table>
 
 <div dir="rtl">

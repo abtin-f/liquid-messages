@@ -222,4 +222,25 @@ class DesignShots {
         vm.onInputChange("Dinner Friday? 🍕")
         shot("new_group") { com.liquidglass.messages.ui.newmessage.NewMessageSheet(onDismiss = {}, onMessageSent = { _, _ -> }, viewModel = vm) }
     }
+
+    @Test fun messageTimes() {
+        val cal = java.util.Calendar.getInstance().apply { set(java.util.Calendar.HOUR_OF_DAY, 15); set(java.util.Calendar.MINUTE, 40); set(java.util.Calendar.SECOND, 0) }
+        val start = cal.timeInMillis
+        fun at(minute: Int, id: Long, body: String, out: Boolean) = Message(
+            id = id, threadId = 1, address = if (out) "" else "+989121112233", body = body,
+            timestamp = start + minute * 60_000L, isOutgoing = out,
+            status = if (out) MessageStatus.DELIVERED else MessageStatus.RECEIVED,
+        )
+        val msgs = listOf(
+            at(0, 1, "Are you coming?", false), at(0, 2, "We start at 4", false),
+            at(2, 3, "On my way", true), at(9, 4, "Traffic is bad", true),
+            at(25, 5, "No rush", false), at(60, 6, "Almost there", true),
+        )
+        shot("message_times") {
+            ChatContent(
+                state = ChatUiState(messages = msgs, contact = Contact("+989121112233", "Sara Ahmadi")),
+                inputText = "", onInputChange = {}, onSend = {}, onBack = {},
+            )
+        }
+    }
 }

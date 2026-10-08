@@ -43,15 +43,26 @@ fun MessagesNavGraph(
     navController: NavHostController = rememberNavController(),
     startWithRecipient: String? = null,
     startWithBody: String? = null,
+    /** Changes with every new deep link (e.g. a notification tap) so it re-navigates. */
+    deepLinkNonce: Int = 0,
 ) {
     // Deep-link handling: when launched via SENDTO/SEND we jump to the chat for
     // the supplied recipient. Keyed on recipient+body so a fresh intent with new
     // values re-triggers, but recomposition alone does not double-navigate.
     if (!startWithRecipient.isNullOrBlank()) {
-        LaunchedEffect(startWithRecipient, startWithBody) {
-            navController.navigate(Routes.chat(NO_THREAD_ID, startWithRecipient)) {
-                // Keep the conversation list beneath so Back returns to it.
-                launchSingleTop = true
+        LaunchedEffect(startWithRecipient, startWithBody, deepLinkNonce) {
+            // Already looking at this person's chat: nothing to do.
+            val top = navController.currentBackStackEntry
+            val onSameChat = top?.destination?.route == Routes.chatPattern &&
+                Routes.decodeAddress(top.arguments?.getString(Routes.argAddress)) == startWithRecipient
+            if (!onSameChat) {
+                navController.navigate(Routes.chat(NO_THREAD_ID, startWithRecipient)) {
+                    // Drop whatever chat / info screen is open so the new person's chat
+                    // is really shown (single-top alone kept the previous conversation).
+                    // The conversation list stays beneath so Back returns to it.
+                    popUpTo(Routes.conversations) { inclusive = false }
+                    launchSingleTop = true
+                }
             }
         }
     }

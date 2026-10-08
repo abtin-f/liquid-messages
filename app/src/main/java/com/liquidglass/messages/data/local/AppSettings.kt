@@ -120,6 +120,11 @@ class AppSettings(context: Context) {
     val autoPlayEffects: StateFlow<Boolean> = _autoPlayEffects.asStateFlow()
     fun setAutoPlayEffects(on: Boolean) = save(KEY_AUTOPLAY, on, _autoPlayEffects)
 
+    private val _messageTimes = flag(KEY_MSG_TIMES, true)
+    /** Shows the exact send/receive time under messages (once per minute). */
+    val showMessageTimes: StateFlow<Boolean> = _messageTimes.asStateFlow()
+    fun setShowMessageTimes(on: Boolean) = save(KEY_MSG_TIMES, on, _messageTimes)
+
     private val _swipeToReply = flag(KEY_SWIPE_REPLY, true)
     val swipeToReply: StateFlow<Boolean> = _swipeToReply.asStateFlow()
     fun setSwipeToReply(on: Boolean) = save(KEY_SWIPE_REPLY, on, _swipeToReply)
@@ -140,7 +145,7 @@ class AppSettings(context: Context) {
 
     // ---- Notifications & feedback ----
 
-    private val _previews = choice(KEY_PREVIEWS, NotificationPreviews.ALWAYS)
+    private val _previews = choice(KEY_PREVIEWS, NotificationPreviews.WHEN_UNLOCKED)
     val notificationPreviews: StateFlow<NotificationPreviews> = _previews.asStateFlow()
     fun setNotificationPreviews(p: NotificationPreviews) = saveChoice(KEY_PREVIEWS, p, _previews)
 
@@ -165,6 +170,7 @@ class AppSettings(context: Context) {
         const val KEY_PHOTOS = "show_contact_photos"
         const val KEY_AUTOPLAY = "autoplay_effects"
         const val KEY_SWIPE_REPLY = "swipe_to_reply"
+        const val KEY_MSG_TIMES = "show_message_times"
         const val KEY_LOW_QUALITY = "low_quality_images"
         const val KEY_FILTER_UNKNOWN = "filter_unknown"
         const val KEY_KEEP = "keep_messages"

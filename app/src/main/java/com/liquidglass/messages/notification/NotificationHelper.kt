@@ -143,10 +143,13 @@ class NotificationHelper(private val context: Context) {
             else -> {
                 builder.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
                 builder.setPublicVersion(
+                    // What the lock screen shows while the phone is locked — like
+                    // Google Messages: no sender, no text, until you unlock.
                     NotificationCompat.Builder(context, CHANNEL_MESSAGES)
                         .setSmallIcon(android.R.drawable.sym_action_chat)
                         .setContentTitle("Messages")
-                        .setContentText("Notification")
+                        .setContentText("New message")
+                        .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                         .build()
                 )
             }

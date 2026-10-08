@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -58,6 +59,10 @@ class MainActivity : ComponentActivity() {
     private var pendingRecipient by mutableStateOf<String?>(null)
     private var pendingBody by mutableStateOf<String?>(null)
 
+    // Bumped on every new deep link so tapping a notification from the same (or
+    // another) person navigates again even while the app sits in the background.
+    private var deepLinkNonce by mutableIntStateOf(0)
+
     /** Launches the system "make default SMS app" flow; refreshes state on return. */
     private val defaultAppLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -94,7 +99,8 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         refreshGates()
-        parseDeepLink(intent)
+        // Only on a fresh launch: after a rotation the nav state is restored as-is.
+        if (savedInstanceState == null) parseDeepLink(intent)
 
         setContent {
             LiquidMessagesTheme {
@@ -114,6 +120,7 @@ class MainActivity : ComponentActivity() {
                         MessagesNavGraph(
                             startWithRecipient = pendingRecipient,
                             startWithBody = pendingBody,
+                            deepLinkNonce = deepLinkNonce,
                         )
                     }
                   }
@@ -219,6 +226,7 @@ class MainActivity : ComponentActivity() {
 
         pendingRecipient = recipient?.takeIf { it.isNotBlank() }
         pendingBody = body?.takeIf { it.isNotBlank() }
+        if (pendingRecipient != null) deepLinkNonce++
     }
 
     /**

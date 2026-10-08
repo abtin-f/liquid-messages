@@ -120,7 +120,7 @@ fun ChatScreen(
     /** Message to scroll to and highlight (from Contact Info). */
     jumpToMessageId: Long? = null,
     onJumpHandled: () -> Unit = {},
-    viewModel: ChatViewModel = viewModel(factory = ChatViewModel.factory(threadId, address)),
+    viewModel: ChatViewModel = viewModel(key = "chat:$threadId:$address", factory = ChatViewModel.factory(threadId, address)),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // While this chat is visible, incoming messages are read the moment they land.
@@ -180,6 +180,8 @@ private sealed interface ChatRow {
         val isFirstInGroup: Boolean,
         val isLastInGroup: Boolean,
         val showStatus: Boolean,
+        /** Exact time shown under the bubble (null = hidden). */
+        val timeLabel: String? = null,
     ) : ChatRow {
         override val key get() = "m${message.id}"
     }
@@ -239,6 +241,7 @@ fun ChatContent(
     }
     val autoPlayEffects = appSettings?.autoPlayEffects?.collectAsState()?.value ?: true
     val swipeToReply = appSettings?.swipeToReply?.collectAsState()?.value ?: true
+    val showMessageTimes = appSettings?.showMessageTimes?.collectAsState()?.value ?: true
     val wallpaperBrush = remember(wallpaper, colors.isDark) { com.liquidglass.messages.ui.theme.wallpaperBrush(wallpaper, colors.isDark) }
 
     var menuTarget by remember { mutableStateOf<Message?>(null) }
@@ -302,7 +305,7 @@ fun ChatContent(
     var highlightId by remember { mutableStateOf<Long?>(null) }
 
     val lastOutgoingId = remember(messages) { messages.lastOrNull { it.isOutgoing }?.id }
-    val rows = remember(messages, lastOutgoingId) { buildRows(context, messages, lastOutgoingId) }
+    val rows = remember(messages, lastOutgoingId, showMessageTimes) { buildRows(context, messages, lastOutgoingId, showMessageTimes) }
     val reversedRows = remember(rows) { rows.asReversed() }
 
     val listState = rememberLazyListState()
@@ -413,6 +416,7 @@ fun ChatContent(
                                     isFirstInGroup = row.isFirstInGroup,
                                     isLastInGroup = row.isLastInGroup,
                                     showStatus = row.showStatus,
+                                    timeLabel = row.timeLabel,
                                     animatedIds = animatedIds,
                                     reaction = meta?.reaction,
                                     theirReaction = meta?.theirReaction,
@@ -807,6 +811,7 @@ private fun buildRows(
     context: Context,
     messages: List<Message>,
     lastOutgoingId: Long?,
+    showTimes: Boolean = true,
 ): List<ChatRow> {
     if (messages.isEmpty()) return emptyList()
     val rows = ArrayList<ChatRow>(messages.size + messages.size / 4)
@@ -830,12 +835,17 @@ private fun buildRows(
         val prevSameSender = prev != null && sameSender(prev, msg) && !needsSeparator
         val nextSameSender = next != null && sameSender(msg, next) && !breaksBetween(msg, next)
 
+        // One exact time per sender run per minute: shown under the last message
+        // of each minute, so a long chat still reads 3:40, 3:41 … 4:40.
+        val minuteEnds = next == null || !sameSender(msg, next) || breaksBetween(msg, next) ||
+            msg.timestamp / 60_000L != next.timestamp / 60_000L
         rows.add(
             ChatRow.Bubble(
                 message = msg,
                 isFirstInGroup = !prevSameSender,
                 isLastInGroup = !nextSameSender,
                 showStatus = msg.isOutgoing && msg.id == lastOutgoingId,
+                timeLabel = if (showTimes && minuteEnds) TimeFormat.timeOnly(context, msg.timestamp) else null,
             )
         )
     }

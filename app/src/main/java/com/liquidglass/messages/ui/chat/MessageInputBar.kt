@@ -35,7 +35,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -228,10 +241,74 @@ fun MessageInputBar(
                             .padding(start = 16.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
                         contentAlignment = Alignment.CenterStart,
                     ) {
+                        // The field keeps its own selection so a double-tap can select the
+                        // tapped word (Compose's text field only does that on long-press).
+                        var fieldValue by remember { mutableStateOf(TextFieldValue(text)) }
+                        // Texts we sent up that the ViewModel hasn't echoed back yet; an echo is
+                        // ignored, anything else (cleared after send, appended by a menu) resets us.
+                        val inFlight = remember { ArrayDeque<String>() }
+                        LaunchedEffect(text) {
+                            val idx = inFlight.indexOf(text)
+                            if (idx >= 0) {
+                                repeat(idx + 1) { inFlight.removeFirst() }
+                            } else if (text != fieldValue.text) {
+                                inFlight.clear()
+                                fieldValue = TextFieldValue(text, TextRange(text.length))
+                            }
+                        }
+                        var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+                        val tapScope = rememberCoroutineScope()
+                        val viewConfig = LocalViewConfiguration.current
                         BasicTextField(
-                            value = text,
-                            onValueChange = onTextChange,
-                            modifier = Modifier.fillMaxWidth(),
+                            value = fieldValue,
+                            onValueChange = {
+                                val changed = it.text != fieldValue.text
+                                fieldValue = it
+                                if (changed) {
+                                    inFlight.addLast(it.text)
+                                    onTextChange(it.text)
+                                }
+                            },
+                            onTextLayout = { layout = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .pointerInput(viewConfig) {
+                                    // Watches taps without consuming them, so the field's own
+                                    // cursor / handle behaviour is untouched.
+                                    var lastUp = 0L
+                                    var lastPos = Offset.Zero
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                        var upChange: PointerInputChange? = null
+                                        while (upChange == null) {
+                                            val event = awaitPointerEvent(PointerEventPass.Final)
+                                            val c = event.changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
+                                            when {
+                                                c.changedToUpIgnoreConsumed() -> upChange = c
+                                                !c.pressed -> return@awaitEachGesture
+                                                (c.position - down.position).getDistance() > viewConfig.touchSlop -> return@awaitEachGesture
+                                            }
+                                        }
+                                        val up = upChange
+                                        val isDouble = lastUp != 0L &&
+                                            up.uptimeMillis - lastUp <= viewConfig.doubleTapTimeoutMillis &&
+                                            (up.position - lastPos).getDistance() <= viewConfig.touchSlop * 3
+                                        lastUp = if (isDouble) 0L else up.uptimeMillis
+                                        lastPos = up.position
+                                        if (isDouble) {
+                                            val l = layout ?: return@awaitEachGesture
+                                            val content = fieldValue.text
+                                            if (content.isEmpty()) return@awaitEachGesture
+                                            val offset = l.getOffsetForPosition(up.position).coerceIn(0, content.length)
+                                            val word = l.getWordBoundary(offset)
+                                            // After the field's own tap handling has placed the cursor.
+                                            tapScope.launch {
+                                                kotlinx.coroutines.delay(40)
+                                                fieldValue = fieldValue.copy(selection = word)
+                                            }
+                                        }
+                                    }
+                                },
                             // Paragraph direction follows the first strong letter:
                             // Persian flows right-to-left and hugs the right edge,
                             // English stays left-to-right — like iOS / Telegram.

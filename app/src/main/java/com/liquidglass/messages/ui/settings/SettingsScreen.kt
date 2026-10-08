@@ -160,6 +160,7 @@ private fun RootPage(onBack: () -> Unit, open: (Page) -> Unit) {
     val filterUnknown by settings.filterUnknown.collectAsState()
     val autoPlay by settings.autoPlayEffects.collectAsState()
     val swipeReply by settings.swipeToReply.collectAsState()
+    val messageTimes by settings.showMessageTimes.collectAsState()
     val haptics by settings.haptics.collectAsState()
     val keep by settings.keepMessages.collectAsState()
     val previews by settings.notificationPreviews.collectAsState()
@@ -250,6 +251,9 @@ private fun RootPage(onBack: () -> Unit, open: (Page) -> Unit) {
             }
             IosRow(title = "Auto-Play Message Effects", icon = IosIcons.Sparkles, iconBackground = TilePink) {
                 IosSwitch(autoPlay, settings::setAutoPlayEffects)
+            }
+            IosRow(title = "Show Message Times", icon = IosIcons.Clock, iconBackground = TileOrange) {
+                IosSwitch(messageTimes, settings::setShowMessageTimes)
             }
             IosRow(title = "Swipe to Reply", icon = IosIcons.Reply, iconBackground = TileBlue) {
                 IosSwitch(swipeReply, settings::setSwipeToReply)

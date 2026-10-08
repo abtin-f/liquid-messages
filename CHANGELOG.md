@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.8.2
+
+- **Message times:** the exact time shows under messages, once per minute per sender run (3:40, 3:42, 4:05 …). Turn it off in Settings › Show Message Times.
+- **Lock screen privacy (like Google Messages):** while the phone is locked, notifications show only "New message"; unlocked, they show the sender and text. Change it in Settings › Show Previews (the default is now When Unlocked).
+- **Double-tap selects a word** in the message box (it used to need a long press).
+- **Fix – notification taps:** tapping a notification from someone else while another chat is open (app minimised) now opens the right conversation instead of staying on the previous chat.
+
 ## 1.8.1
 
 - **Inbox:** the large title and search field sit at the top again. When you scroll down, search docks at the bottom next to compose (iOS 26), and it returns to the top when you scroll back up.

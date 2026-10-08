@@ -78,6 +78,8 @@ fun MessageBubble(
     isLastInGroup: Boolean,
     modifier: Modifier = Modifier,
     showStatus: Boolean = false,
+    /** Exact time shown in small type under the bubble. */
+    timeLabel: String? = null,
     animatedIds: MutableSet<Long> = mutableSetOf(),
     /** Our own tapback (blue badge, iMessage style). */
     reaction: Reaction? = null,
@@ -263,19 +265,25 @@ fun MessageBubble(
         }
 
         // Status caption under the newest sent message (or any failed one).
-        val caption = when {
+        val statusCaption = when {
             failed -> "Not Delivered"
             outgoing && showStatus -> message.status.caption()
             else -> null
         }
+        val caption = if (failed) statusCaption else listOfNotNull(timeLabel, statusCaption).joinToString(" · ").ifBlank { null }
         if (caption != null) {
             Text(
                 text = caption,
                 style = IosType.caption2,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = if (statusCaption != null) FontWeight.SemiBold else FontWeight.Normal,
                 color = if (failed) colors.destructive else colors.secondaryText,
                 modifier = Modifier
-                    .padding(top = 3.dp, bottom = 1.dp, end = if (failed) 30.dp else BubbleTailWidth + 2.dp)
+                    .padding(
+                        top = 3.dp,
+                        bottom = 1.dp,
+                        start = if (outgoing) 0.dp else BubbleTailWidth + 2.dp,
+                        end = if (!outgoing) 0.dp else if (failed) 30.dp else BubbleTailWidth + 2.dp,
+                    )
                     .then(if (failed) Modifier.clickable(onClick = onRetry) else Modifier),
             )
         }

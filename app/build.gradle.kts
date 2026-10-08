@@ -20,8 +20,8 @@ android {
         applicationId = "com.liquidglass.messages"
         minSdk = 24
         targetSdk = 34
-        versionCode = 181
-        versionName = "1.8.1"
+        versionCode = 182
+        versionName = "1.8.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
