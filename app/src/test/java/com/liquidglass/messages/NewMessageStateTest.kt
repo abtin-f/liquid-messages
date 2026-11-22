@@ -10,7 +10,7 @@ import org.junit.Test
 class NewMessageStateTest {
     @Test fun typedNumberCountsAsRecipient() {
         val s = NewMessageUiState(recipient = "0912 111 2233", picked = listOf(Contact("+15551234567", "Olivia")))
-        assertEquals(listOf("+15551234567", "0912 111 2233"), s.addresses)
+        assertEquals(listOf("+15551234567", "09121112233"), s.addresses)
         assertTrue(s.isGroup)
     }
 
@@ -18,6 +18,13 @@ class NewMessageStateTest {
         val s = NewMessageUiState(recipient = "09121112233", picked = listOf(Contact("+989121112233", "Sara")))
         assertEquals(1, s.addresses.size)
         assertFalse(s.isGroup)
+    }
+
+    @Test fun addressesAreStrippedOfSpacesAndPunctuation() {
+        val s = NewMessageUiState(picked = listOf(Contact(" +91 93705-33275 ", "Maithil")))
+        assertEquals(listOf("+919370533275"), s.addresses)
+        val t = NewMessageUiState(picked = listOf(Contact("(937) 053 3275", "Maithil")))
+        assertEquals(listOf("9370533275"), t.addresses)
     }
 
     @Test fun nameBeingTypedIsNotARecipient() {

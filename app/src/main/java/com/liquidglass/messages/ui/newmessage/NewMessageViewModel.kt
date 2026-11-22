@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.AP
 import com.liquidglass.messages.MessagesApplication
 import com.liquidglass.messages.data.model.Contact
 import com.liquidglass.messages.data.sms.SmsRepository
+import com.liquidglass.messages.util.toSendableAddress
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -41,6 +42,7 @@ data class NewMessageUiState(
     /** Everyone a send goes to: the tokens plus a number still being typed. */
     val addresses: List<String>
         get() = (picked.map { it.number } + listOfNotNull(recipient.trim().takeIf { it.looksLikeNumber() }))
+            .map { it.toSendableAddress() }
             .distinctBy { it.filter(Char::isDigit).takeLast(10) }
 
     /** Kept for the single-recipient callers. */
@@ -48,6 +50,7 @@ data class NewMessageUiState(
 
     val isGroup: Boolean get() = addresses.size > 1
 }
+
 
 /** A typed recipient that can be texted: mostly digits, optionally with + ( ) - and spaces. */
 internal fun String.looksLikeNumber(): Boolean {
