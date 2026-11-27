@@ -17,6 +17,7 @@ import com.liquidglass.messages.data.model.Message
 import com.liquidglass.messages.data.model.MessageStatus
 import com.liquidglass.messages.data.mms.MmsCoordinator
 import com.liquidglass.messages.data.mms.MmsStore
+import com.liquidglass.messages.util.toSendableAddress
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -476,6 +477,7 @@ class SmsRepositoryImpl(
         subscriptionId: Int
     ): Result<Unit> = withContext(ioDispatcher) {
         try {
+            val address = address.toSendableAddress()
             val threadId = getOrCreateThreadId(address)
 
             // Insert an outbox row first so the UI reflects the message immediately.
@@ -874,7 +876,7 @@ class SmsRepositoryImpl(
     override suspend fun getOrCreateThreadId(address: String): Long =
         withContext(ioDispatcher) {
             try {
-                Telephony.Threads.getOrCreateThreadId(appContext, address)
+                Telephony.Threads.getOrCreateThreadId(appContext, address.toSendableAddress())
             } catch (_: Exception) {
                 // Some providers throw for malformed addresses; -1 signals failure.
                 -1L

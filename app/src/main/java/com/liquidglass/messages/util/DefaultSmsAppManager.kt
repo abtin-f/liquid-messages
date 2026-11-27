@@ -17,8 +17,18 @@ import android.provider.Telephony
 object DefaultSmsAppManager {
 
     /** True when this package currently holds the default-SMS role. */
-    fun isDefaultSmsApp(context: Context): Boolean =
-        Telephony.Sms.getDefaultSmsPackage(context) == context.packageName
+    fun isDefaultSmsApp(context: Context): Boolean {
+        // The role manager is the source of truth on API 29+. Telephony.Sms
+        // .getDefaultSmsPackage() can disagree with it on some OEM builds, which
+        // left the app stuck on the setup screen despite holding the role.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = context.getSystemService(RoleManager::class.java)
+            if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_SMS)) {
+                return roleManager.isRoleHeld(RoleManager.ROLE_SMS)
+            }
+        }
+        return Telephony.Sms.getDefaultSmsPackage(context) == context.packageName
+    }
 
     /**
      * Builds the intent that prompts the user to make this app the default SMS

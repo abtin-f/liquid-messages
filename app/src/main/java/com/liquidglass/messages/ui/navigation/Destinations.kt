@@ -60,5 +60,10 @@ object Routes {
      * string for a null input so callers always receive a non-null address.
      */
     fun decodeAddress(encoded: String?): String =
-        if (encoded.isNullOrEmpty()) "" else URLDecoder.decode(encoded, Charsets.UTF_8.name())
+        // Navigation already URL-decodes query args once, so a number arrives as
+        // "+91...". URLDecoder would turn that '+' into a space (" 91..."), which
+        // made sends land in a different thread than incoming messages. Protect
+        // literal '+' signs; real encoded forms (%2B, %20) still decode.
+        if (encoded.isNullOrEmpty()) ""
+        else URLDecoder.decode(encoded.replace("+", "%2B"), Charsets.UTF_8.name())
 }
